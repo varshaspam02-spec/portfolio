@@ -1,0 +1,787 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>PCA Dimensionality Reduction - Interactive Visualization</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 20px;
+            color: #333;
+        }
+
+        .container {
+            max-width: 1600px;
+            margin: 0 auto;
+            background: white;
+            border-radius: 20px;
+            box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+            overflow: hidden;
+        }
+
+        .header {
+            background: linear-gradient(135deg, #2d3748 0%, #1a202c 100%);
+            color: white;
+            padding: 30px;
+            text-align: center;
+        }
+
+        .header h1 {
+            font-size: 2.5em;
+            margin-bottom: 10px;
+            font-weight: 700;
+        }
+
+        .header p {
+            font-size: 1.1em;
+            opacity: 0.9;
+        }
+
+        .main-content {
+            display: grid;
+            grid-template-columns: 350px 1fr;
+            gap: 20px;
+            padding: 20px;
+        }
+
+        .controls {
+            background: #f7fafc;
+            padding: 25px;
+            border-radius: 15px;
+            height: fit-content;
+        }
+
+        .control-group {
+            margin-bottom: 25px;
+        }
+
+        .control-group label {
+            display: block;
+            font-weight: 600;
+            margin-bottom: 8px;
+            color: #2d3748;
+            font-size: 0.95em;
+        }
+
+        .slider-container {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        input[type="range"] {
+            flex: 1;
+            height: 6px;
+            border-radius: 5px;
+            background: #cbd5e0;
+            outline: none;
+            -webkit-appearance: none;
+        }
+
+        input[type="range"]::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            appearance: none;
+            width: 18px;
+            height: 18px;
+            border-radius: 50%;
+            background: #667eea;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        input[type="range"]::-webkit-slider-thumb:hover {
+            background: #5568d3;
+            transform: scale(1.2);
+        }
+
+        input[type="range"]::-moz-range-thumb {
+            width: 18px;
+            height: 18px;
+            border-radius: 50%;
+            background: #667eea;
+            cursor: pointer;
+            border: none;
+        }
+
+        .value-display {
+            min-width: 40px;
+            text-align: right;
+            font-weight: 600;
+            color: #667eea;
+        }
+
+        button {
+            width: 100%;
+            padding: 14px;
+            border: none;
+            border-radius: 10px;
+            font-size: 1em;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s;
+            margin-bottom: 10px;
+        }
+
+        .btn-primary {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+        }
+
+        .btn-primary:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(102, 126, 234, 0.4);
+        }
+
+        .btn-secondary {
+            background: #e2e8f0;
+            color: #2d3748;
+        }
+
+        .btn-secondary:hover {
+            background: #cbd5e0;
+        }
+
+        .stats {
+            background: white;
+            padding: 15px;
+            border-radius: 10px;
+            margin-top: 20px;
+            border: 2px solid #e2e8f0;
+        }
+
+        .stats h3 {
+            margin-bottom: 12px;
+            color: #2d3748;
+            font-size: 1.1em;
+        }
+
+        .stat-row {
+            display: flex;
+            justify-content: space-between;
+            padding: 8px 0;
+            border-bottom: 1px solid #e2e8f0;
+            font-size: 0.9em;
+        }
+
+        .stat-row:last-child {
+            border-bottom: none;
+        }
+
+        .stat-label {
+            color: #4a5568;
+        }
+
+        .stat-value {
+            font-weight: 600;
+            color: #667eea;
+        }
+
+        .visualizations {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 20px;
+        }
+
+        .viz-container {
+            background: #f7fafc;
+            border-radius: 15px;
+            padding: 20px;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+        }
+
+        .viz-container h2 {
+            margin-bottom: 15px;
+            color: #2d3748;
+            font-size: 1.3em;
+            text-align: center;
+        }
+
+        canvas {
+            border-radius: 10px;
+            display: block;
+            margin: 0 auto;
+        }
+
+        .variance-bars {
+            margin-top: 15px;
+        }
+
+        .variance-bar {
+            margin-bottom: 10px;
+        }
+
+        .variance-label {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 5px;
+            font-size: 0.9em;
+            color: #4a5568;
+        }
+
+        .bar-bg {
+            background: #e2e8f0;
+            height: 20px;
+            border-radius: 10px;
+            overflow: hidden;
+        }
+
+        .bar-fill {
+            height: 100%;
+            background: linear-gradient(90deg, #667eea 0%, #764ba2 100%);
+            transition: width 0.5s ease;
+            display: flex;
+            align-items: center;
+            justify-content: flex-end;
+            padding-right: 8px;
+            color: white;
+            font-size: 0.8em;
+            font-weight: 600;
+        }
+
+        .info-box {
+            background: #edf2f7;
+            padding: 15px;
+            border-radius: 10px;
+            margin-top: 15px;
+            border-left: 4px solid #667eea;
+        }
+
+        .info-box p {
+            font-size: 0.9em;
+            line-height: 1.6;
+            color: #4a5568;
+        }
+
+        @media (max-width: 1200px) {
+            .main-content {
+                grid-template-columns: 1fr;
+            }
+
+            .visualizations {
+                grid-template-columns: 1fr;
+            }
+        }
+    </style>
+<link rel="stylesheet" href="../assets/lab-theme.css">
+<script defer src="../assets/lab-bridge.js"></script>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>🔬 PCA Dimensionality Reduction</h1>
+            <p>Interactive visualization of Principal Component Analysis: 3D → 2D projection</p>
+        </div>
+
+        <div class="main-content">
+            <div class="controls">
+                <div class="control-group">
+                    <label>Number of Data Points (N)</label>
+                    <div class="slider-container">
+                        <input type="range" id="numPoints" min="50" max="500" value="200" step="10">
+                        <span class="value-display" id="numPointsValue">200</span>
+                    </div>
+                </div>
+
+                <div class="control-group">
+                    <label>Number of Clusters</label>
+                    <div class="slider-container">
+                        <input type="range" id="numClusters" min="1" max="5" value="3" step="1">
+                        <span class="value-display" id="numClustersValue">3</span>
+                    </div>
+                </div>
+
+                <div class="control-group">
+                    <label>Cluster Spread (σ)</label>
+                    <div class="slider-container">
+                        <input type="range" id="spread" min="0.5" max="3" value="1.5" step="0.1">
+                        <span class="value-display" id="spreadValue">1.5</span>
+                    </div>
+                </div>
+
+                <div class="control-group">
+                    <label>3D Rotation Speed</label>
+                    <div class="slider-container">
+                        <input type="range" id="rotationSpeed" min="0" max="2" value="0.5" step="0.1">
+                        <span class="value-display" id="rotationSpeedValue">0.5</span>
+                    </div>
+                </div>
+
+                <button class="btn-primary" onclick="generateNewData()">🎲 Generate New Data</button>
+                <button class="btn-primary" onclick="runPCA()">▶️ Run PCA</button>
+                <button class="btn-secondary" onclick="resetView()">🔄 Reset View</button>
+
+                <div class="stats">
+                    <h3>📊 PCA Statistics</h3>
+                    <div class="stat-row">
+                        <span class="stat-label">Total Points:</span>
+                        <span class="stat-value" id="totalPoints">0</span>
+                    </div>
+                    <div class="stat-row">
+                        <span class="stat-label">Original Dims:</span>
+                        <span class="stat-value">3D</span>
+                    </div>
+                    <div class="stat-row">
+                        <span class="stat-label">Reduced Dims:</span>
+                        <span class="stat-value">2D</span>
+                    </div>
+                    <div class="stat-row">
+                        <span class="stat-label">Variance Retained:</span>
+                        <span class="stat-value" id="varianceRetained">0%</span>
+                    </div>
+                </div>
+
+                <div class="info-box">
+                    <p><strong>How it works:</strong> PCA finds the directions (principal components) of maximum variance in your data. The first PC captures the most variance, the second captures the second-most, and so on. By projecting to the top 2 PCs, we reduce from 3D to 2D while preserving the most information.</p>
+                </div>
+            </div>
+
+            <div class="visualizations">
+                <div class="viz-container">
+                    <h2>Original 3D Data</h2>
+                    <canvas id="canvas3d" width="600" height="500"></canvas>
+                </div>
+
+                <div class="viz-container">
+                    <h2>PCA 2D Projection</h2>
+                    <canvas id="canvas2d" width="600" height="500"></canvas>
+                    
+                    <div class="variance-bars">
+                        <div class="variance-bar">
+                            <div class="variance-label">
+                                <span>PC1 (1st Principal Component)</span>
+                                <span id="pc1Var">0%</span>
+                            </div>
+                            <div class="bar-bg">
+                                <div class="bar-fill" id="pc1Bar" style="width: 0%"></div>
+                            </div>
+                        </div>
+                        <div class="variance-bar">
+                            <div class="variance-label">
+                                <span>PC2 (2nd Principal Component)</span>
+                                <span id="pc2Var">0%</span>
+                            </div>
+                            <div class="bar-bg">
+                                <div class="bar-fill" id="pc2Bar" style="width: 0%"></div>
+                            </div>
+                        </div>
+                        <div class="variance-bar">
+                            <div class="variance-label">
+                                <span>PC3 (3rd Principal Component)</span>
+                                <span id="pc3Var">0%</span>
+                            </div>
+                            <div class="bar-bg">
+                                <div class="bar-fill" id="pc3Bar" style="width: 0%"></div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Global variables
+        let dataPoints = [];
+        let pcaResult = null;
+        let rotation = 0;
+        let autoRotate = true;
+
+        // Canvas contexts
+        const canvas3d = document.getElementById('canvas3d');
+        const ctx3d = canvas3d.getContext('2d');
+        const canvas2d = document.getElementById('canvas2d');
+        const ctx2d = canvas2d.getContext('2d');
+
+        // Colors for clusters
+        const colors = ['#667eea', '#f6ad55', '#48bb78', '#ed64a6', '#4299e1'];
+
+        // Matrix operations
+        class Matrix {
+            static multiply(a, b) {
+                const result = [];
+                for (let i = 0; i < a.length; i++) {
+                    result[i] = [];
+                    for (let j = 0; j < b[0].length; j++) {
+                        let sum = 0;
+                        for (let k = 0; k < a[0].length; k++) {
+                            sum += a[i][k] * b[k][j];
+                        }
+                        result[i][j] = sum;
+                    }
+                }
+                return result;
+            }
+
+            static transpose(matrix) {
+                return matrix[0].map((_, i) => matrix.map(row => row[i]));
+            }
+
+            static mean(matrix, axis = 0) {
+                if (axis === 0) {
+                    const means = new Array(matrix[0].length).fill(0);
+                    for (let i = 0; i < matrix.length; i++) {
+                        for (let j = 0; j < matrix[0].length; j++) {
+                            means[j] += matrix[i][j];
+                        }
+                    }
+                    return means.map(m => m / matrix.length);
+                }
+            }
+
+            static subtract(matrix, vector) {
+                return matrix.map(row => row.map((val, i) => val - vector[i]));
+            }
+
+            static covariance(centered) {
+                const n = centered.length;
+                const d = centered[0].length;
+                const cov = Array(d).fill(0).map(() => Array(d).fill(0));
+                
+                for (let i = 0; i < d; i++) {
+                    for (let j = 0; j < d; j++) {
+                        let sum = 0;
+                        for (let k = 0; k < n; k++) {
+                            sum += centered[k][i] * centered[k][j];
+                        }
+                        cov[i][j] = sum / (n - 1);
+                    }
+                }
+                return cov;
+            }
+
+            // Power iteration for eigendecomposition
+            static eigenDecomposition(matrix) {
+                const n = matrix.length;
+                const maxIter = 1000;
+                const tol = 1e-10;
+                const eigenvalues = [];
+                const eigenvectors = [];
+                
+                // Create a copy of the matrix
+                let A = matrix.map(row => [...row]);
+                
+                for (let i = 0; i < n; i++) {
+                    // Power iteration
+                    let v = Array(n).fill(0).map(() => Math.random());
+                    let norm = Math.sqrt(v.reduce((sum, val) => sum + val * val, 0));
+                    v = v.map(val => val / norm);
+                    
+                    let eigenvalue = 0;
+                    for (let iter = 0; iter < maxIter; iter++) {
+                        // Av
+                        const Av = A.map(row => 
+                            row.reduce((sum, val, j) => sum + val * v[j], 0)
+                        );
+                        
+                        // Eigenvalue
+                        eigenvalue = v.reduce((sum, val, j) => sum + val * Av[j], 0);
+                        
+                        // Normalize
+                        norm = Math.sqrt(Av.reduce((sum, val) => sum + val * val, 0));
+                        const v_new = Av.map(val => val / norm);
+                        
+                        // Check convergence
+                        const diff = v_new.reduce((sum, val, j) => 
+                            sum + Math.abs(val - v[j]), 0
+                        );
+                        
+                        v = v_new;
+                        
+                        if (diff < tol) break;
+                    }
+                    
+                    eigenvalues.push(eigenvalue);
+                    eigenvectors.push(v);
+                    
+                    // Deflate matrix
+                    for (let j = 0; j < n; j++) {
+                        for (let k = 0; k < n; k++) {
+                            A[j][k] -= eigenvalue * v[j] * v[k];
+                        }
+                    }
+                }
+                
+                // Sort by eigenvalue (descending)
+                const indices = eigenvalues.map((_, i) => i)
+                    .sort((a, b) => eigenvalues[b] - eigenvalues[a]);
+                
+                return {
+                    eigenvalues: indices.map(i => eigenvalues[i]),
+                    eigenvectors: indices.map(i => eigenvectors[i])
+                };
+            }
+        }
+
+        // PCA implementation
+        function performPCA(data) {
+            // Center the data
+            const means = Matrix.mean(data);
+            const centered = Matrix.subtract(data, means);
+            
+            // Compute covariance matrix
+            const cov = Matrix.covariance(centered);
+            
+            // Eigendecomposition
+            const eigen = Matrix.eigenDecomposition(cov);
+            
+            // Calculate explained variance
+            const totalVariance = eigen.eigenvalues.reduce((a, b) => a + b, 0);
+            const explainedVariance = eigen.eigenvalues.map(ev => ev / totalVariance);
+            
+            // Project onto first 2 principal components
+            const components = Matrix.transpose([eigen.eigenvectors[0], eigen.eigenvectors[1]]);
+            const centeredT = Matrix.transpose(centered);
+            const projected = Matrix.transpose(Matrix.multiply(components, centeredT));
+            
+            return {
+                projected,
+                components: eigen.eigenvectors,
+                eigenvalues: eigen.eigenvalues,
+                explainedVariance,
+                means
+            };
+        }
+
+        // Generate random data
+        function generateNewData() {
+            const n = parseInt(document.getElementById('numPoints').value);
+            const numClusters = parseInt(document.getElementById('numClusters').value);
+            const spread = parseFloat(document.getElementById('spread').value);
+            
+            dataPoints = [];
+            
+            for (let c = 0; c < numClusters; c++) {
+                const centerX = (Math.random() - 0.5) * 8;
+                const centerY = (Math.random() - 0.5) * 8;
+                const centerZ = (Math.random() - 0.5) * 8;
+                
+                const pointsPerCluster = Math.floor(n / numClusters);
+                
+                for (let i = 0; i < pointsPerCluster; i++) {
+                    const x = centerX + (Math.random() - 0.5) * spread * 2;
+                    const y = centerY + (Math.random() - 0.5) * spread * 2;
+                    const z = centerZ + (Math.random() - 0.5) * spread * 2;
+                    
+                    dataPoints.push({
+                        x, y, z,
+                        cluster: c,
+                        color: colors[c]
+                    });
+                }
+            }
+            
+            document.getElementById('totalPoints').textContent = dataPoints.length;
+            draw3D();
+            
+            // Auto-run PCA
+            runPCA();
+        }
+
+        // Run PCA
+        function runPCA() {
+            if (dataPoints.length === 0) return;
+            
+            const data = dataPoints.map(p => [p.x, p.y, p.z]);
+            pcaResult = performPCA(data);
+            
+            // Update variance statistics
+            const var1 = (pcaResult.explainedVariance[0] * 100).toFixed(1);
+            const var2 = (pcaResult.explainedVariance[1] * 100).toFixed(1);
+            const var3 = (pcaResult.explainedVariance[2] * 100).toFixed(1);
+            const totalVar = (parseFloat(var1) + parseFloat(var2)).toFixed(1);
+            
+            document.getElementById('pc1Var').textContent = var1 + '%';
+            document.getElementById('pc2Var').textContent = var2 + '%';
+            document.getElementById('pc3Var').textContent = var3 + '%';
+            document.getElementById('varianceRetained').textContent = totalVar + '%';
+            
+            document.getElementById('pc1Bar').style.width = var1 + '%';
+            document.getElementById('pc2Bar').style.width = var2 + '%';
+            document.getElementById('pc3Bar').style.width = var3 + '%';
+            
+            draw2D();
+        }
+
+        // 3D projection to 2D
+        function project3D(x, y, z, angle) {
+            const scale = 40;
+            const distance = 400;
+            
+            // Rotate
+            const cosA = Math.cos(angle);
+            const sinA = Math.sin(angle);
+            const x1 = x * cosA - z * sinA;
+            const z1 = x * sinA + z * cosA;
+            
+            // Project
+            const factor = distance / (distance + z1);
+            const x2d = x1 * factor * scale + canvas3d.width / 2;
+            const y2d = y * factor * scale + canvas3d.height / 2;
+            
+            return { x: x2d, y: y2d, z: z1 };
+        }
+
+        // Draw 3D visualization
+        function draw3D() {
+            ctx3d.fillStyle = '#0b141e';
+            ctx3d.fillRect(0, 0, canvas3d.width, canvas3d.height);
+            
+            // Draw grid
+            ctx3d.strokeStyle = '#253b49';
+            ctx3d.lineWidth = 1;
+            for (let i = -10; i <= 10; i += 2) {
+                const p1 = project3D(i, 0, -10, rotation);
+                const p2 = project3D(i, 0, 10, rotation);
+                ctx3d.beginPath();
+                ctx3d.moveTo(p1.x, p1.y);
+                ctx3d.lineTo(p2.x, p2.y);
+                ctx3d.stroke();
+                
+                const p3 = project3D(-10, 0, i, rotation);
+                const p4 = project3D(10, 0, i, rotation);
+                ctx3d.beginPath();
+                ctx3d.moveTo(p3.x, p3.y);
+                ctx3d.lineTo(p4.x, p4.y);
+                ctx3d.stroke();
+            }
+            
+            // Sort points by z for proper rendering
+            const projected = dataPoints.map(p => ({
+                ...project3D(p.x, p.y, p.z, rotation),
+                color: p.color
+            })).sort((a, b) => a.z - b.z);
+            
+            // Draw points
+            projected.forEach(p => {
+                ctx3d.fillStyle = p.color;
+                ctx3d.beginPath();
+                ctx3d.arc(p.x, p.y, 4, 0, Math.PI * 2);
+                ctx3d.fill();
+            });
+            
+            // Draw axes
+            ctx3d.strokeStyle = '#ff0000';
+            ctx3d.lineWidth = 2;
+            const origin = project3D(0, 0, 0, rotation);
+            const xAxis = project3D(3, 0, 0, rotation);
+            ctx3d.beginPath();
+            ctx3d.moveTo(origin.x, origin.y);
+            ctx3d.lineTo(xAxis.x, xAxis.y);
+            ctx3d.stroke();
+            
+            ctx3d.strokeStyle = '#00ff00';
+            const yAxis = project3D(0, 3, 0, rotation);
+            ctx3d.beginPath();
+            ctx3d.moveTo(origin.x, origin.y);
+            ctx3d.lineTo(yAxis.x, yAxis.y);
+            ctx3d.stroke();
+            
+            ctx3d.strokeStyle = '#0000ff';
+            const zAxis = project3D(0, 0, 3, rotation);
+            ctx3d.beginPath();
+            ctx3d.moveTo(origin.x, origin.y);
+            ctx3d.lineTo(zAxis.x, zAxis.y);
+            ctx3d.stroke();
+        }
+
+        // Draw 2D PCA projection
+        function draw2D() {
+            if (!pcaResult) return;
+            
+            ctx2d.fillStyle = '#0b141e';
+            ctx2d.fillRect(0, 0, canvas2d.width, canvas2d.height);
+            
+            // Draw grid
+            ctx2d.strokeStyle = '#253b49';
+            ctx2d.lineWidth = 1;
+            for (let i = -10; i <= 10; i++) {
+                ctx2d.beginPath();
+                ctx2d.moveTo(canvas2d.width / 2 + i * 40, 0);
+                ctx2d.lineTo(canvas2d.width / 2 + i * 40, canvas2d.height);
+                ctx2d.stroke();
+                
+                ctx2d.beginPath();
+                ctx2d.moveTo(0, canvas2d.height / 2 + i * 40);
+                ctx2d.lineTo(canvas2d.width, canvas2d.height / 2 + i * 40);
+                ctx2d.stroke();
+            }
+            
+            // Draw axes
+            ctx2d.strokeStyle = '#9dbab6';
+            ctx2d.lineWidth = 2;
+            ctx2d.beginPath();
+            ctx2d.moveTo(canvas2d.width / 2, 0);
+            ctx2d.lineTo(canvas2d.width / 2, canvas2d.height);
+            ctx2d.stroke();
+            ctx2d.beginPath();
+            ctx2d.moveTo(0, canvas2d.height / 2);
+            ctx2d.lineTo(canvas2d.width, canvas2d.height / 2);
+            ctx2d.stroke();
+            
+            // Draw axis labels
+            ctx2d.fillStyle = '#b5cec8';
+            ctx2d.font = 'bold 14px Arial';
+            ctx2d.fillText('PC1', canvas2d.width - 40, canvas2d.height / 2 - 10);
+            ctx2d.fillText('PC2', canvas2d.width / 2 + 10, 20);
+            
+            // Draw projected points
+            const scale = 40;
+            pcaResult.projected.forEach((point, i) => {
+                const x = canvas2d.width / 2 + point[0] * scale;
+                const y = canvas2d.height / 2 - point[1] * scale;
+                
+                ctx2d.fillStyle = dataPoints[i].color;
+                ctx2d.beginPath();
+                ctx2d.arc(x, y, 4, 0, Math.PI * 2);
+                ctx2d.fill();
+            });
+        }
+
+        // Animation loop
+        function animate() {
+            const speed = parseFloat(document.getElementById('rotationSpeed').value);
+            if (speed > 0) {
+                rotation += speed * 0.01;
+                draw3D();
+            }
+            requestAnimationFrame(animate);
+        }
+
+        // Reset view
+        function resetView() {
+            rotation = 0;
+            draw3D();
+        }
+
+        // Event listeners
+        document.getElementById('numPoints').addEventListener('input', (e) => {
+            document.getElementById('numPointsValue').textContent = e.target.value;
+        });
+
+        document.getElementById('numClusters').addEventListener('input', (e) => {
+            document.getElementById('numClustersValue').textContent = e.target.value;
+        });
+
+        document.getElementById('spread').addEventListener('input', (e) => {
+            document.getElementById('spreadValue').textContent = e.target.value;
+        });
+
+        document.getElementById('rotationSpeed').addEventListener('input', (e) => {
+            document.getElementById('rotationSpeedValue').textContent = e.target.value;
+        });
+
+        // Initialize
+        generateNewData();
+        animate();
+    </script>
+</body>
+</html>

@@ -1,0 +1,331 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Neural Network Playground – From Scratch</title>
+  <style>
+    :root{
+      --bg:#0b0f14;--panel:#111826;--panel2:#0e1520;--ink:#eaf3ff;--muted:#a8bed6;--acc:#5ab0ff;--ok:#8be9a0;--warn:#ffd166;--bad:#ff6b6b
+    }
+    *{box-sizing:border-box}
+    html,body{height:100%}
+    body{margin:0;background:radial-gradient(1200px 800px at 20% 0%,#0e1622 0%,#0b0f14 60%,#090d12 100%);color:var(--ink);font:14px/1.45 system-ui,-apple-system,Segoe UI,Roboto,Helvetica,Arial}
+    header{display:flex;align-items:center;justify-content:space-between;padding:14px 18px;border-bottom:1px solid #1b283c;background:linear-gradient(180deg,#101a2a,#0c1421)}
+    header h1{font-size:16px;margin:0}
+    .wrap{display:grid;grid-template-columns:360px 1fr;gap:14px;padding:14px;height:calc(100% - 56px)}
+    .card{background:var(--panel);border:1px solid #1a263a;border-radius:14px;padding:12px;box-shadow:0 10px 30px rgba(0,0,0,.25);min-height:0}
+    .title{font-size:12px;color:var(--muted);text-transform:uppercase;letter-spacing:.12em;margin:6px 0 10px}
+    .row{display:grid;gap:8px;margin-bottom:10px}
+    label{font-size:12px;color:var(--muted)}
+    input,select,button{font:inherit}
+    input[type=number],input[type=text],select{width:100%;background:var(--panel2);color:var(--ink);border:1px solid #1a263a;border-radius:10px;padding:8px 10px;outline:none}
+    button{cursor:pointer;border:1px solid #23435f;background:linear-gradient(180deg,#17334b,#13283b);color:#e6f3ff;border-radius:12px;padding:10px 12px;font-weight:600}
+    button.secondary{background:#182233;border-color:#26364d;color:#dbe7f6}
+    button:disabled{opacity:.5;cursor:not-allowed}
+    .hint{color:var(--muted);font-size:12px}
+
+    .canvas-wrap{display:grid;grid-template-columns:1fr auto;gap:10px;align-items:start}
+    #draw{background:#000;border:1px solid #1a263a;border-radius:10px;touch-action:none}
+    .digit-grid{display:grid;grid-template-columns:repeat(10,1fr);gap:6px}
+    .digit-grid button{padding:6px 0;font-weight:700}
+
+    .flex{display:flex;gap:10px;flex-wrap:wrap}
+    .grid{display:grid;gap:8px}
+    .cols-2{grid-template-columns:1fr 1fr}
+
+    .section{border-top:1px solid #1a263a;margin-top:10px;padding-top:10px}
+
+    #lossChart{width:100%;height:160px;background:#0f1622;border:1px solid #1a263a;border-radius:10px}
+
+    .bars{display:grid;grid-template-columns:repeat(10,1fr);gap:6px}
+    .bar{background:#0f1622;border:1px solid #1a263a;border-radius:10px;overflow:hidden}
+    .bar-inner{height:0%;background:linear-gradient(180deg,#5ab0ff,#2b7fcc)}
+    .bar-label{font-size:12px;color:var(--muted);text-align:center;padding:4px}
+
+    .mini{display:grid;grid-template-columns:repeat(8,1fr);gap:6px}
+    .mini canvas{width:100%;aspect-ratio:1/1;border:1px solid #1a263a;border-radius:6px;background:#0f1622}
+
+    .weights-tabs{display:flex;gap:8px;margin-bottom:6px;flex-wrap:wrap}
+    .weights-tabs button{padding:6px 10px}
+    .active{outline:2px solid var(--acc)}
+
+    table{border-collapse:collapse;width:100%}
+    th,td{padding:6px 8px;border-bottom:1px solid #1a263a}
+    th{color:#b6c6da;text-align:left}
+  </style>
+  <script src="../assets/vendor/chart-4.4.1.min.js"></script>
+<link rel="stylesheet" href="../assets/lab-theme.css">
+<script defer src="../assets/lab-bridge.js"></script>
+</head>
+<body>
+<aside class="sg-context-note">This small educational model is initialized using synthetic digits. Its predictions are demonstrations, not a handwriting-recognition benchmark.</aside>
+  <header>
+    <h1>Neural Network Playground · from scratch (no libs)</h1>
+    <div class="hint">ReLU + Softmax · Cross-Entropy · Real backprop · Xavier/He init · SGD · Live one-sample BP</div>
+  </header>
+
+  <div class="wrap">
+    <aside class="card" style="overflow:auto">
+      <div class="title">Draw & Label</div>
+      <div class="canvas-wrap">
+        <canvas id="draw" width="280" height="280"></canvas>
+        <div class="grid" style="width:170px">
+          <div class="row">
+            <label>Brush size</label>
+            <input id="brush" type="range" min="6" max="28" value="18"/>
+          </div>
+          <button id="clear" class="secondary">Clear</button>
+          <div class="row">
+            <label>Selected label</label>
+            <input id="labelDisplay" value="0" disabled />
+          </div>
+          <button id="add">Add to training set</button>
+          <div class="hint" id="count">0 samples</div>
+        </div>
+      </div>
+      <div class="digit-grid" style="margin-top:8px" id="digitGrid"></div>
+
+      <div class="section">
+        <div class="title">Training</div>
+        <div class="row cols-2">
+          <div>
+            <label>Hidden units</label>
+            <input id="hidden" type="number" value="64" min="8" max="256" />
+          </div>
+          <div>
+            <label>Learning rate</label>
+            <input id="lr" type="number" step="0.001" value="0.1" />
+          </div>
+          <div>
+            <label>Batch size</label>
+            <input id="batch" type="number" value="16" min="1" />
+          </div>
+          <div>
+            <label>Epochs</label>
+            <input id="epochs" type="number" value="20" min="1" />
+          </div>
+          <div>
+            <label>Init</label>
+            <select id="init">
+              <option value="xavier">Xavier (Glorot)</option>
+              <option value="he">He (Kaiming)</option>
+            </select>
+          </div>
+          <div>
+            <label>Shuffle each epoch</label>
+            <select id="shuffle"><option value="yes">yes</option><option value="no">no</option></select>
+          </div>
+        </div>
+        <div class="flex">
+          <button id="train">Train Network</button>
+          <button id="predictBtn" class="secondary">Predict Drawing</button>
+        </div>
+        <div class="flex" style="margin-top:8px">
+          <button id="teachBtn">Teach This Drawing (steps)</button>
+          <input id="teachSteps" type="number" value="3" min="1" style="width:70px"/>
+          <label style="display:flex;align-items:center;gap:6px"><input id="autoCorrect" type="checkbox" checked/> auto-correct on wrong pred</label>
+        </div>
+        <div class="hint">Warm start runs automatically on load with synthetic digits so the net isn't blank.</div>
+        <div class="hint" id="pretrainStatus">Pretraining…</div>
+      </div>
+
+      <div class="section">
+        <div class="title">Dataset</div>
+        <table id="dataTable"></table>
+      </div>
+    </aside>
+
+    <main class="card" style="display:grid;grid-template-rows:auto auto 1fr;gap:10px;overflow:auto">
+      <section>
+        <div class="title">Prediction</div>
+        <div class="bars" id="probs"></div>
+      </section>
+
+      <section>
+        <div class="title">Loss</div>
+        <canvas id="lossChart"></canvas>
+      </section>
+
+      <section style="min-height:0">
+        <div class="title">Neurons, Weights & Gradients (last step)</div>
+        <div class="weights-tabs">
+          <button id="tabHidden" class="active">Hidden activations</button>
+          <button id="tabW1">W1 (input→hidden)</button>
+          <button id="tabBackproj">Back-projected class templates</button>
+          <button id="tabGradW1">|∂L/∂W1| heatmaps</button>
+          <button id="tabGradW2">|∂L/∂W2| bars</button>
+        </div>
+        <div class="mini" id="miniGrid"></div>
+      </section>
+    </main>
+  </div>
+
+<script>
+// ========= Linear algebra helpers =========
+function zeros(r,c){ const a=new Float32Array(r*c); return {r,c,a}; }
+function randn(){ let u=0,v=0; while(u===0)u=Math.random(); while(v===0)v=Math.random(); return Math.sqrt(-2*Math.log(u))*Math.cos(2*Math.PI*v); }
+function matmul(A,B){ const {r:aR,c:aC,a:a} = A, {r:bR,c:bC,a:b}=B; const out=zeros(aR,bC); for(let i=0;i<aR;i++){ for(let k=0;k<aC;k++){ const av=a[i*aC+k]; for(let j=0;j<bC;j++) out.a[i*bC+j]+=av*b[k*bC+j]; } } return out; }
+function addBias(X,b){ const out=zeros(X.r,X.c); for(let i=0;i<X.r;i++){ for(let j=0;j<X.c;j++){ out.a[i*X.c+j]=X.a[i*X.c+j]+b[j]; } } return out; }
+function relu(X){ const Y=zeros(X.r,X.c); for(let i=0;i<X.r;i++){ for(let j=0;j<X.c;j++){ const v=X.a[i*X.c+j]; Y.a[i*X.c+j]=v>0?v:0; } } return Y; }
+function reluGrad(X){ const G=new Float32Array(X.a.length); for(let i=0;i<G.length;i++) G[i]=X.a[i]>0?1:0; return G; }
+function softmaxRow(v){ const m=Math.max(...v); const ex=v.map(x=>Math.exp(x-m)); const s=ex.reduce((p,c)=>p+c,0); return ex.map(e=>e/s); }
+
+// ========= Network =========
+class MLP{
+  constructor(input, hidden, output, init='xavier', lr=0.1){
+    this.input=input; this.hidden=hidden; this.output=output; this.lr=lr; this.init=init;
+    this.W1=zeros(input,hidden); this.b1=new Float32Array(hidden);
+    this.W2=zeros(hidden,output); this.b2=new Float32Array(output);
+    const initPair=(fanIn,fanOut)=>{ if(init==='he'){ const s=Math.sqrt(2/fanIn); return ()=>randn()*s; } const s=Math.sqrt(6/(fanIn+fanOut)); return ()=> (Math.random()*2-1)*s; };
+    const f1=initPair(input,hidden), f2=initPair(hidden,output);
+    for(let i=0;i<this.W1.a.length;i++) this.W1.a[i]=f1();
+    for(let i=0;i<this.W2.a.length;i++) this.W2.a[i]=f2();
+  }
+  forward(Xbatch){
+    this.X = Xbatch; // save
+    this.Z1 = addBias(matmul(Xbatch, this.W1), this.b1);
+    this.A1 = relu(this.Z1);
+    this.Z2 = addBias(matmul(this.A1, this.W2), this.b2);
+    this.P = {r:this.Z2.r, c:this.Z2.c, a:new Float32Array(this.Z2.a)};
+    this.probs=[];
+    for(let i=0;i<this.Z2.r;i++){
+      const row=[]; for(let j=0;j<this.Z2.c;j++) row.push(this.Z2.a[i*this.Z2.c+j]);
+      const s=softmaxRow(row); this.probs.push(s); for(let j=0;j<this.Z2.c;j++) this.P.a[i*this.Z2.c+j]=s[j];
+    }
+    return this.P;
+  }
+  loss(yIdx){ let L=0; for(let i=0;i<yIdx.length;i++){ const p=this.probs[i][yIdx[i]]; L+=-Math.log(Math.max(p,1e-12)); } return L/yIdx.length; }
+  backward(yIdx, storeGrads=false){
+    const n = this.X.r, D = this.output;
+    const dZ2 = zeros(n,D);
+    for(let i=0;i<n;i++){ for(let j=0;j<D;j++){ dZ2.a[i*D+j]=this.P.a[i*D+j] - (j===yIdx[i]?1:0); } }
+    const A1T = {r:this.A1.c,c:this.A1.r,a:new Float32Array(this.A1.a.length)};
+    for(let i=0;i<this.A1.r;i++) for(let j=0;j<this.A1.c;j++) A1T.a[j*this.A1.r+i]=this.A1.a[i*this.A1.c+j];
+    const dW2 = matmul(A1T, dZ2);
+    const db2 = new Float32Array(D); for(let i=0;i<dZ2.a.length;i++) db2[i%D]+=dZ2.a[i];
+
+    const W2T = {r:this.W2.c,c:this.W2.r,a:new Float32Array(this.W2.a.length)};
+    for(let i=0;i<this.W2.r;i++) for(let j=0;j<this.W2.c;j++) W2T.a[j*this.W2.r+i]=this.W2.a[i*this.W2.c+j];
+    let dA1 = matmul(dZ2, W2T);
+    const R = reluGrad(this.Z1); for(let i=0;i<dA1.a.length;i++) dA1.a[i]*=R[i];
+
+    const XT = {r:this.X.c,c:this.X.r,a:new Float32Array(this.X.a.length)};
+    for(let i=0;i<this.X.r;i++) for(let j=0;j<this.X.c;j++) XT.a[j*this.X.r+i]=this.X.a[i*this.X.c+j];
+    const dW1 = matmul(XT, dA1);
+    const db1 = new Float32Array(this.hidden); for(let i=0;i<dA1.a.length;i++) db1[i%this.hidden]+=dA1.a[i];
+
+    const rate = this.lr / n;
+    for(let i=0;i<this.W2.a.length;i++) this.W2.a[i]-=rate*dW2.a[i];
+    for(let j=0;j<this.b2.length;j++) this.b2[j]-=rate*db2[j];
+    for(let i=0;i<this.W1.a.length;i++) this.W1.a[i]-=rate*dW1.a[i];
+    for(let j=0;j<this.b1.length;j++) this.b1[j]-=rate*db1[j];
+
+    if(storeGrads){ this.lastGradW1=dW1; this.lastGradW2=dW2; this.lastDb1=db1; this.lastDb2=db2; }
+  }
+  predictProbs(x){ const X = {r:1,c:this.input,a:new Float32Array(x)}; const Z1 = addBias(matmul(X,this.W1), this.b1); const A1 = relu(Z1); const Z2 = addBias(matmul(A1,this.W2), this.b2); const row=[]; for(let j=0;j<this.output;j++) row.push(Z2.a[j]); return softmaxRow(row); }
+}
+
+// ========= UI + Data =========
+const draw = document.getElementById('draw');
+const ctx = draw.getContext('2d'); ctx.fillStyle = 'black'; ctx.fillRect(0,0,draw.width,draw.height); let drawing=false, brush=+document.getElementById('brush').value; ctx.lineCap='round'; ctx.lineJoin='round'; ctx.strokeStyle='white';
+function pos(evt){ const r=draw.getBoundingClientRect(); const x=(evt.touches?evt.touches[0].clientX:evt.clientX)-r.left; const y=(evt.touches?evt.touches[0].clientY:evt.clientY)-r.top; return {x,y}; }
+function start(e){ drawing=true; const p=pos(e); ctx.lineWidth=brush; ctx.beginPath(); ctx.moveTo(p.x,p.y); }
+function move(e){ if(!drawing) return; const p=pos(e); ctx.lineWidth=brush; ctx.lineTo(p.x,p.y); ctx.stroke(); }
+function end(){ drawing=false; }
+
+draw.addEventListener('mousedown',start); draw.addEventListener('mousemove',move); window.addEventListener('mouseup',end);
+
+draw.addEventListener('touchstart', e=>{e.preventDefault(); start(e)} ,{passive:false});
+draw.addEventListener('touchmove', e=>{e.preventDefault(); move(e)} ,{passive:false});
+draw.addEventListener('touchend', e=>{e.preventDefault(); end(e)} ,{passive:false});
+
+document.getElementById('brush').addEventListener('input',e=>brush=+e.target.value);
+
+document.getElementById('clear').onclick=()=>{ ctx.fillStyle='black'; ctx.fillRect(0,0,draw.width,draw.height); ctx.fillStyle='white'; };
+
+// label buttons 0-9
+const digitGrid=document.getElementById('digitGrid'); let currentLabel=0; const labelDisplay=document.getElementById('labelDisplay'); for(let d=0; d<10; d++){ const btn=document.createElement('button'); btn.textContent=d; btn.onclick=()=>{ currentLabel=d; labelDisplay.value=String(d); }; digitGrid.appendChild(btn); }
+
+// dataset storage
+const data=[]; const countEl=document.getElementById('count'); const table=document.getElementById('dataTable');
+function refreshTable(){ table.innerHTML=''; const thead=document.createElement('thead'); thead.innerHTML='<tr><th>#</th><th>label</th><th>preview</th></tr>'; table.appendChild(thead); const tb=document.createElement('tbody'); data.forEach((row,i)=>{ const tr=document.createElement('tr'); const td0=document.createElement('td'); td0.textContent=String(i+1); tr.appendChild(td0); const td1=document.createElement('td'); td1.textContent=String(row.y); tr.appendChild(td1); const td2=document.createElement('td'); const c=document.createElement('canvas'); c.width=28; c.height=28; drawDigitToCanvas(row.x,c); c.style.imageRendering='pixelated'; c.style.width='56px'; c.style.height='56px'; td2.appendChild(c); tr.appendChild(td2); tb.appendChild(tr); }); table.appendChild(tb); countEl.textContent=`${data.length} samples`; }
+
+function downsample(){ const tmp=document.createElement('canvas'); tmp.width=28; tmp.height=28; const tctx=tmp.getContext('2d'); tctx.fillStyle='black'; tctx.fillRect(0,0,28,28); tctx.drawImage(draw,0,0,28,28); const img=tctx.getImageData(0,0,28,28).data; const x=new Float32Array(28*28); for(let i=0;i<28*28;i++){ const r=img[i*4+0], g=img[i*4+1], b=img[i*4+2]; const v=(r+g+b)/3/255; x[i]=v; } return x; }
+function drawDigitToCanvas(x, canvas){ const c=canvas.getContext('2d'); const img=c.createImageData(28,28); for(let i=0;i<28*28;i++){ const v=Math.max(0,Math.min(255,Math.round(x[i]*255))); img.data[i*4+0]=v; img.data[i*4+1]=v; img.data[i*4+2]=v; img.data[i*4+3]=255; } c.putImageData(img,0,0); }
+
+document.getElementById('add').onclick=()=>{ const x=downsample(); data.push({x,y:currentLabel}); refreshTable(); };
+
+// ========= Training =========
+let net=null; let chart=null; const probsEl=document.getElementById('probs');
+for(let i=0;i<10;i++){ const wrap=document.createElement('div'); wrap.className='bar'; const inner=document.createElement('div'); inner.className='bar-inner'; inner.style.height='0%'; const lab=document.createElement('div'); lab.className='bar-label'; lab.textContent=String(i); wrap.appendChild(inner); wrap.appendChild(lab); probsEl.appendChild(wrap); }
+
+const lossCanvas=document.getElementById('lossChart'); chart=new Chart(lossCanvas,{type:'line',data:{labels:[],datasets:[{label:'loss',data:[],tension:.2}]},options:{plugins:{legend:{display:false}},scales:{x:{ticks:{display:false}}}}});
+function* batches(arr, size){ for(let i=0;i<arr.length;i+=size) yield arr.slice(i,i+size); }
+function shuffle(a){ for(let i=a.length-1;i>0;i--){ const j=Math.floor(Math.random()*(i+1)); [a[i],a[j]]=[a[j],a[i]]; } }
+
+async function train(trainData=data){ if(trainData.length<5){ alert('Add more samples first.'); return; } const hidden=+document.getElementById('hidden').value; const lr=+document.getElementById('lr').value; const batch=+document.getElementById('batch').value; const epochs=+document.getElementById('epochs').value; const init=document.getElementById('init').value; const doShuffle=document.getElementById('shuffle').value==='yes'; net=new MLP(784, hidden, 10, init, lr); chart.data.labels=[]; chart.data.datasets[0].data=[]; chart.update(); let order=[...trainData.keys()]; for(let ep=0; ep<epochs; ep++){ if(doShuffle) shuffle(order); let epochLoss=0, seen=0; for(const idxBatch of batches(order, batch)){ const X=zeros(idxBatch.length, 784); const yIdx=[]; for(let i=0;i<idxBatch.length;i++){ const row=trainData[idxBatch[i]]; yIdx.push(row.y); X.a.set(row.x, i*784); } net.forward(X); const L=net.loss(yIdx); epochLoss += L*idxBatch.length; seen += idxBatch.length; net.backward(yIdx, ep===epochs-1); } const avg=epochLoss/seen; chart.data.labels.push(ep+1); chart.data.datasets[0].data.push(avg); chart.update(); await new Promise(r=>setTimeout(r,10)); } }
+
+function updateBars(p){ const bars=probsEl.querySelectorAll('.bar-inner'); for(let i=0;i<10;i++){ bars[i].style.height=(p[i]*100).toFixed(1)+'%'; bars[i].parentElement.style.outline = i===argMax(p)?'2px solid var(--ok)':'1px solid #1a263a'; } }
+function argMax(a){ let m=-1,mi=0; for(let i=0;i<a.length;i++){ if(a[i]>m){ m=a[i]; mi=i; } } return mi; }
+
+function predictCurrent(){ if(!net){ alert('Model not ready yet.'); return; } const x=downsample(); const p=net.predictProbs(x); updateBars(p); renderHiddenAndWeights(x); const auto=document.getElementById('autoCorrect').checked; const target=currentLabel; const pred=argMax(p); if(auto && pred!==target){ teachOnSample({x, y: target}, +document.getElementById('teachSteps').value); const p2=net.predictProbs(x); updateBars(p2); renderHiddenAndWeights(x); } }
+
+async function teachOnSample(sample, steps=1){ if(!net){ // if not trained yet, quick init
+    net=new MLP(784, +document.getElementById('hidden').value, 10, document.getElementById('init').value, +document.getElementById('lr').value);
+  }
+  for(let s=0;s<steps;s++){
+    const X=zeros(1,784); X.a.set(sample.x,0); net.forward(X); chart.data.labels.push(`t${chart.data.labels.length+1}`); const L=net.loss([sample.y]); chart.data.datasets[0].data.push(L); chart.update(); net.backward([sample.y], true); await new Promise(r=>setTimeout(r,0));
+  }
+}
+
+document.getElementById('train').onclick=()=>train();
+document.getElementById('predictBtn').onclick=predictCurrent;
+document.getElementById('teachBtn').onclick=()=>{ const x=downsample(); teachOnSample({x, y: currentLabel}, +document.getElementById('teachSteps').value).then(()=>{ updateBars(net.predictProbs(x)); renderHiddenAndWeights(x); }); };
+
+// ========= Neurons & Weights & Gradients visualization =========
+const mini=document.getElementById('miniGrid'); const tabHidden=document.getElementById('tabHidden'); const tabW1=document.getElementById('tabW1'); const tabBack=document.getElementById('tabBackproj'); const tabGradW1=document.getElementById('tabGradW1'); const tabGradW2=document.getElementById('tabGradW2'); let currentTab='hidden';
+function clearMini(){ mini.innerHTML=''; tabHidden.classList.remove('active'); tabW1.classList.remove('active'); tabBack.classList.remove('active'); tabGradW1.classList.remove('active'); tabGradW2.classList.remove('active'); }
+function setTab(t){ currentTab=t; clearMini(); if(t==='hidden') tabHidden.classList.add('active'); if(t==='w1') tabW1.classList.add('active'); if(t==='back') tabBack.classList.add('active'); if(t==='gw1') tabGradW1.classList.add('active'); if(t==='gw2') tabGradW2.classList.add('active'); renderMini(); }
+
+tabHidden.onclick=()=>setTab('hidden'); tabW1.onclick=()=>setTab('w1'); tabBack.onclick=()=>setTab('back'); tabGradW1.onclick=()=>setTab('gw1'); tabGradW2.onclick=()=>setTab('gw2');
+
+function renderHiddenAndWeights(x){ renderMini(x); }
+
+function renderMini(x){ mini.innerHTML=''; if(!net) return; if(currentTab==='hidden'){ const X={r:1,c:784,a:new Float32Array(x||downsample())}; const Z1=addBias(matmul(X, net.W1), net.b1); const A1=relu(Z1); const H=A1.a; const Hn=[...H]; const max=Math.max(...Hn)+1e-9; for(let i=0;i<Math.min(64, net.hidden); i++){ const c=document.createElement('canvas'); c.width=28; c.height=28; const g=c.getContext('2d'); const v=H[i]/max; g.fillStyle=`rgb(${Math.floor((1-v)*40)},${Math.floor(100+v*120)},${Math.floor(220)})`; g.fillRect(0,0,28,28); const lbl=document.createElement('div'); lbl.style.textAlign='center'; lbl.style.fontSize='11px'; lbl.style.color='var(--muted)'; lbl.textContent=`h${i}=${H[i].toFixed(2)}`; const wrap=document.createElement('div'); wrap.appendChild(c); wrap.appendChild(lbl); mini.appendChild(wrap); } } else if(currentTab==='w1'){ const H=Math.min(32, net.hidden); for(let h=0; h<H; h++){ const can=document.createElement('canvas'); can.width=28; can.height=28; const g=can.getContext('2d'); const w = new Float32Array(28*28); for(let i=0;i<28*28;i++) w[i]=net.W1.a[i*net.hidden + h]; paintHeatmap(g,w); mini.appendChild(can); } } else if(currentTab==='back'){ for(let k=0;k<10;k++){ const back = new Float32Array(28*28); for(let i=0;i<28*28;i++){ let s=0; for(let h=0; h<net.hidden; h++) s += net.W1.a[i*net.hidden+h] * net.W2.a[h*10+k]; back[i]=s; } const can=document.createElement('canvas'); can.width=28; can.height=28; const g=can.getContext('2d'); paintHeatmap(g, back); const lbl=document.createElement('div'); lbl.style.textAlign='center'; lbl.style.fontSize='11px'; lbl.style.color='var(--muted)'; lbl.textContent=`class ${k}`; const wrap=document.createElement('div'); wrap.appendChild(can); wrap.appendChild(lbl); mini.appendChild(wrap); } } else if(currentTab==='gw1'){ // gradient heatmap for W1 (abs)
+    if(!net.lastGradW1){ const msg=document.createElement('div'); msg.textContent='Do a train/teach step to see gradients.'; msg.className='hint'; mini.appendChild(msg); return; }
+    const H=Math.min(32, net.hidden); for(let h=0; h<H; h++){ const can=document.createElement('canvas'); can.width=28; can.height=28; const g=can.getContext('2d'); const w = new Float32Array(28*28); for(let i=0;i<28*28;i++) w[i]=Math.abs(net.lastGradW1.a[i*net.hidden + h]); paintHeatmap(g,w); mini.appendChild(can); }
+  } else if(currentTab==='gw2'){ // show |dW2| per class as bar labels
+    const tbl=document.createElement('table'); const thead=document.createElement('thead'); thead.innerHTML='<tr><th>class</th><th>‖∂L/∂W2[:,k]‖₁</th></tr>'; tbl.appendChild(thead); const tb=document.createElement('tbody'); for(let k=0;k<10;k++){ let s=0; for(let h=0; h<net.hidden; h++) s+=Math.abs(net.lastGradW2?net.lastGradW2.a[h*10+k]:0); const tr=document.createElement('tr'); tr.innerHTML=`<td>${k}</td><td>${s.toFixed(3)}</td>`; tb.appendChild(tr); } tbl.appendChild(tb); mini.appendChild(tbl);
+  }
+}
+
+function paintHeatmap(g, arr){ const min=Math.min(...arr), max=Math.max(...arr); const span=(max-min)||1; const img=g.createImageData(28,28); for(let i=0;i<28*28;i++){ const v=(arr[i]-min)/span; const r = Math.floor(255*v); const b = Math.floor(255*(1-v)); const idx=i*4; img.data[idx]=r; img.data[idx+1]=img.data[idx+2]=0; img.data[idx+3]=255; img.data[idx+2]=b; } g.putImageData(img,0,0); g.canvas.style.imageRendering='pixelated'; g.canvas.style.width='56px'; g.canvas.style.height='56px'; }
+
+// initial bars state
+updateBars(new Array(10).fill(0)); setTab('hidden');
+
+// ========= Warm-start pretraining =========
+const pretrainStatus=document.getElementById('pretrainStatus');
+(async function warmStart(){
+  // synthesize simple digit sprites by drawing font glyphs with jitter
+  function synthDigits(nPerClass=15){
+    const samples=[]; const off=document.createElement('canvas'); off.width=28; off.height=28; const g=off.getContext('2d');
+    for(let d=0; d<10; d++){
+      for(let i=0;i<nPerClass;i++){
+        g.clearRect(0,0,28,28); g.fillStyle='black'; g.fillRect(0,0,28,28); g.fillStyle='white';
+        const jitterX=(Math.random()*6-3), jitterY=(Math.random()*6-3); const size=20+Math.random()*6; g.font=`${size}px monospace`; g.textAlign='center'; g.textBaseline='middle'; g.fillText(String(d), 14+jitterX, 16+jitterY);
+        const img=g.getImageData(0,0,28,28).data; const x=new Float32Array(28*28); for(let p=0;p<28*28;p++){ const r=img[p*4]; const v=r/255; x[p]=v; }
+        samples.push({x, y:d});
+      }
+    }
+    return samples;
+  }
+  const synth = synthDigits(15); // 150 samples
+  document.getElementById('hidden').value = 64; document.getElementById('lr').value = 0.1; document.getElementById('batch').value = 32; document.getElementById('epochs').value = 8; document.getElementById('init').value='he';
+  await train(synth);
+  pretrainStatus.textContent = 'Pretrained on synthetic digits. Add your own and keep teaching in real time.';
+})();
+</script>
+</body>
+</html>

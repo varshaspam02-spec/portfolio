@@ -1,0 +1,425 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Gradient Descent Visualizer – Ball on a Loss Landscape</title>
+  <style>
+    :root{--bg:#f7fafc;--panel:#ffffff;--ink:#0f172a;--muted:#6b7280;--border:#e5e7eb;--acc:#7c3aed;--acc2:#06b6d4;--ok:#16a34a;--warn:#f59e0b;--bad:#ef4444}
+    *{box-sizing:border-box}
+    html,body{height:100%}
+    body{margin:0;background:radial-gradient(1200px 800px at 10% -10%, #edf2ff 0%, #f7fafc 60%, #f7fafc 100%);color:var(--ink);font:14px/1.45 system-ui,-apple-system,Segoe UI,Roboto,Helvetica,Arial}
+    header{display:flex;align-items:center;justify-content:space-between;padding:14px 18px;border-bottom:1px solid var(--border);background:linear-gradient(180deg,#ffffff,#f9fafb)}
+    header h1{font-size:16px;margin:0}
+    .wrap{display:grid;grid-template-columns:340px 1fr;gap:14px;padding:14px;height:calc(100% - 56px)}
+    .card{background:var(--panel);border:1px solid var(--border);border-radius:16px;padding:12px;box-shadow:0 8px 24px rgba(15,23,42,.06);min-height:0}
+    .title{font-size:12px;color:var(--muted);text-transform:uppercase;letter-spacing:.12em;margin:6px 0 10px}
+    .row{display:grid;gap:8px;margin-bottom:10px}
+    label{font-size:12px;color:var(--muted)}
+    input,select,button{font:inherit}
+    input[type=number],input[type=text],select{width:100%;background:#f8fafc;color:var(--ink);border:1px solid var(--border);border-radius:10px;padding:8px 10px;outline:none}
+    input[type=range]{width:100%}
+    button{cursor:pointer;border:1px solid #e6e0ff;background:linear-gradient(180deg,#ede9fe,#ddd6fe);color:#3b0764;border-radius:12px;padding:10px 12px;font-weight:700}
+    button.secondary{background:linear-gradient(180deg,#ecfeff,#cffafe);border-color:#bae6fd;color:#0c4a6e}
+    button.ghost{background:#fff;border-color:var(--border);color:#111827}
+    button:disabled{opacity:.5;cursor:not-allowed}
+    .hint{color:var(--muted);font-size:12px}
+
+    .canvas-wrap{display:grid;grid-template-rows:auto 1fr;gap:8px;height:100%}
+    #view{width:100%;height:clamp(480px,68vh,900px);background:#fff;border:1px solid var(--border);border-radius:14px;position:relative;overflow:hidden}
+    #field{position:absolute;inset:0;width:100%;height:100%}
+    #cnv{position:absolute;inset:0;width:100%;height:100%}
+
+    .legend{display:flex;gap:10px;align-items:center;flex-wrap:wrap}
+    .badge{border-radius:999px;padding:3px 8px;border:1px solid var(--border);background:#fff;color:#475569;font-size:12px}
+
+    #lossCanvas{width:100%;height:clamp(220px,28vh,420px);background:#fff;border:1px solid var(--border);border-radius:10px;display:block}
+
+    .flex{display:flex;gap:8px;flex-wrap:wrap}
+    .grid{display:grid;gap:8px}
+    .cols-2{grid-template-columns:1fr 1fr}
+    .pill{display:inline-block;border-radius:999px;padding:2px 8px;border:1px solid var(--border);background:#fff}
+
+    .test-pass{color:var(--ok)}
+    .test-fail{color:var(--bad)}
+  </style>
+<link rel="stylesheet" href="../assets/lab-theme.css">
+<script defer src="../assets/lab-bridge.js"></script>
+</head>
+<body>
+  <header>
+    <h1>Gradient Descent Visualizer · ball rolling on a loss landscape</h1>
+    <div class="legend">
+      <span class="badge">Contours + trail</span>
+      <span class="badge">GD / Momentum / Nesterov / Adam</span>
+      <span class="badge">Rosenbrock / Bowl / Saddle / Rastrigin</span>
+      <span class="badge" id="testBadge" title="Self-tests: finite coords & stable loop">Self‑tests: pending…</span>
+    </div>
+  </header>
+
+  <div class="wrap">
+    <aside class="card" style="overflow:auto">
+      <div class="title">Loss Function</div>
+      <div class="row">
+        <label>Function</label>
+        <select id="fn">
+          <option value="bowl">Quadratic bowl: 0.5(x² + 2y²)</option>
+          <option value="rosen">Rosenbrock: (1-x)² + 100(y - x²)²</option>
+          <option value="saddle">Saddle: x² - y²</option>
+          <option value="rastrigin">Rastrigin: 20 + ∑(x² - 10cos(2πx))</option>
+        </select>
+      </div>
+      <div class="row cols-2">
+        <div>
+          <label>Range</label>
+          <select id="range">
+            <option value="2">[-2,2]</option>
+            <option value="3">[-3,3]</option>
+            <option value="5" selected>[-5,5]</option>
+          </select>
+        </div>
+        <div>
+          <label>Grid resolution</label>
+          <select id="res"><option>64</option><option selected>96</option><option>128</option></select>
+        </div>
+      </div>
+      <div class="row cols-2">
+        <div>
+          <label>Color map</label>
+          <select id="cmap">
+            <option value="turbo" selected>Turbo (high contrast)</option>
+            <option value="viridis">Viridis</option>
+            <option value="warmcool">Warm–Cool</option>
+          </select>
+        </div>
+        <div>
+          <label>Contrast (γ)</label>
+          <input type="range" id="gamma" min="0.5" max="2.5" step="0.05" value="1.2" />
+        </div>
+        <div>
+          <label>Contours</label>
+          <select id="contours"><option value="on" selected>on</option><option value="off">off</option></select>
+        </div>
+        <div>
+          <label>Levels</label>
+          <input type="number" id="levels" min="4" max="40" value="12">
+        </div>
+      </div>
+
+      <div class="title">Optimizer</div>
+      <div class="row">
+        <label>Type</label>
+        <select id="opt">
+          <option value="gd">Gradient Descent</option>
+          <option value="mom" selected>Momentum</option>
+          <option value="nesterov">Nesterov Momentum</option>
+          <option value="adam">Adam</option>
+        </select>
+      </div>
+      <div class="row cols-2">
+        <div>
+          <label>Learning rate</label>
+          <input type="range" id="lr" min="0.001" max="1" step="0.001" value="0.05" />
+          <div class="hint"><span id="lrV">0.05</span></div>
+        </div>
+        <div>
+          <label>Momentum β / β₁</label>
+          <input type="range" id="beta1" min="0" max="0.999" step="0.001" value="0.9" />
+          <div class="hint"><span id="b1V">0.9</span></div>
+        </div>
+        <div>
+          <label>Nesterov/Adam β₂</label>
+          <input type="range" id="beta2" min="0" max="0.999" step="0.001" value="0.999" />
+          <div class="hint"><span id="b2V">0.999</span></div>
+        </div>
+        <div>
+          <label>Noise σ</label>
+          <input type="range" id="noise" min="0" max="0.5" step="0.001" value="0.0" />
+          <div class="hint"><span id="nzV">0.0</span></div>
+        </div>
+      </div>
+
+      <div class="row">
+        <label>Start position</label>
+        <div class="flex">
+          <button id="randStart" class="secondary">Randomize</button>
+          <button id="centerStart" class="ghost">Center</button>
+        </div>
+      </div>
+
+      <div class="row">
+        <label>Controls</label>
+        <div class="flex">
+          <button id="play">▶ Play</button>
+          <button id="pause" class="ghost">❚❚ Pause</button>
+          <button id="step" class="secondary">Step</button>
+          <button id="reset" class="ghost">Reset</button>
+        </div>
+        <div class="hint">Click the canvas to set the start. Loss updates only while running/stepping.</div>
+      </div>
+
+      <div class="title">Info</div>
+      <div class="row">
+        <div class="pill">x: <span id="xv">0.00</span></div>
+        <div class="pill">y: <span id="yv">0.00</span></div>
+        <div class="pill">f(x,y): <span id="fv">0.00</span></div>
+      </div>
+    </aside>
+
+    <main class="card" style="display:grid;grid-template-rows:1fr auto;gap:10px;overflow:auto">
+      <section class="canvas-wrap">
+        <div id="view">
+          <canvas id="field"></canvas>
+          <canvas id="cnv"></canvas>
+        </div>
+      </section>
+      <section>
+        <div class="title">Loss over steps</div>
+        <div class="flex" style="margin-bottom:6px">
+          <label style="display:flex;align-items:center;gap:6px"><input id="logScale" type="checkbox" checked> Log scale</label>
+          <label style="display:flex;align-items:center;gap:6px"><input id="smoothLoss" type="checkbox" checked> Smooth</label>
+        </div>
+        <div class="row cols-2" style="margin-top:4px">
+          <div>
+            <label>Loss scale</label>
+            <input type="range" id="lossZoom" min="0.1" max="10" step="0.1" value="1" />
+            <div class="hint"><span id="lossZoomV">1.0×</span></div>
+          </div>
+        </div>
+        <canvas id="lossCanvas" height="160"></canvas>
+      </section>
+    </main>
+  </div>
+
+<script>
+// ------------- Error banner -------------
+window.addEventListener('error', (e)=>{ const b=document.getElementById('testBadge'); if(b){ b.textContent='Error: '+(e.message||'script'); b.classList.remove('test-pass'); b.classList.add('test-fail'); } console.error(e); });
+window.addEventListener('unhandledrejection', (e)=>{ const b=document.getElementById('testBadge'); if(b){ b.textContent='Error: '+(e.reason&&e.reason.message?e.reason.message:String(e.reason)); b.classList.remove('test-pass'); b.classList.add('test-fail'); } console.error(e); });
+
+// ------------- DOM + sizing -------------
+const fieldC=document.getElementById('field');
+const drawC=document.getElementById('cnv');
+const fctx=fieldC.getContext('2d');
+const dctx=drawC.getContext('2d');
+function sizeCanvases(){
+  const view=document.getElementById('view');
+  const r=view.getBoundingClientRect();
+  const w=Math.max(1,Math.floor(r.width));
+  const h=Math.max(1,Math.floor(r.height));
+  if(fieldC.width!==w||fieldC.height!==h){ fieldC.width=w; fieldC.height=h; }
+  if(drawC.width!==w||drawC.height!==h){ drawC.width=w; drawC.height=h; }
+}
+new ResizeObserver(()=>{ sizeCanvases(); renderField(); renderFrame(); }).observe(document.getElementById('view'));
+window.addEventListener('load', ()=>{sizeCanvases(); renderField(); resetSim(); renderFrame(); runSelfTests(); requestAnimationFrame(()=>{ sizeCanvases(); renderField(); renderFrame(); });});
+window.addEventListener('resize', ()=>{sizeCanvases(); renderField(); renderFrame();});
+// loss scale UI
+document.getElementById('lossZoom')?.addEventListener('input', ()=>{ const v=+document.getElementById('lossZoom').value; document.getElementById('lossZoomV').textContent = v.toFixed(1)+'×'; updateLossChart(); });
+
+// ------------- UI refs -------------
+const el = id => document.getElementById(id);
+['lr','beta1','beta2','noise'].forEach(id=>el(id).addEventListener('input',()=>{ el(id==='lr'?'lrV':id==='beta1'?'b1V':id==='beta2'?'b2V':'nzV').textContent = (+el(id).value).toFixed(3); }));
+['fn','range','res','cmap','gamma','contours','levels'].forEach(id=>el(id).addEventListener('change',()=>{ renderField(); resetSim(); renderFrame(); }));
+el('opt').addEventListener('change',()=>{ optimizer=makeOpt(); });
+el('randStart').onclick=()=>{ const R=+el('range').value; state.x=(Math.random()*2-1)*R; state.y=(Math.random()*2-1)*R; resetSim(); renderFrame(); };
+el('centerStart').onclick=()=>{ state.x=0; state.y=0; resetSim(); renderFrame(); };
+el('play').onclick=()=>{ running=true; loop(); };
+el('pause').onclick=()=>{ running=false; };
+el('step').onclick=()=>{ stepOnce(); renderFrame(); };
+el('reset').onclick=()=>{ resetSim(); renderFrame(); };
+
+// ------------- Functions & grads -------------
+function f_bowl([x,y]){ const val=0.5*(x*x+2*y*y); return {val,grad:[x,2*y]}; }
+function f_rosen([x,y]){ const a=1,b=100; const val=(a-x)**2+b*(y-x*x)**2; const dfdx=-2*(a-x)-4*b*x*(y-x*x); const dfdy=2*b*(y-x*x); return {val,grad:[dfdx,dfdy]}; }
+function f_saddle([x,y]){ return {val:x*x-y*y,grad:[2*x,-2*y]}; }
+function f_rastrigin([x,y]){ const A=10; const val=2*A+(x*x-A*Math.cos(2*Math.PI*x))+(y*y-A*Math.cos(2*Math.PI*y)); const dfdx=2*x+2*Math.PI*A*Math.sin(2*Math.PI*x); const dfdy=2*y+2*Math.PI*A*Math.sin(2*Math.PI*y); return {val,grad:[dfdx,dfdy]}; }
+function getFn(){ const v=el('fn').value; return v==='bowl'?f_bowl:v==='rosen'?f_rosen:v==='saddle'?f_saddle:f_rastrigin; }
+
+// ------------- Optimizers -------------
+function makeOpt(){ const type=el('opt').value; const lr=+el('lr').value; const b1=+el('beta1').value; const b2=+el('beta2').value; const eps=1e-8;
+  if(type==='gd'){ return {step:(p,g)=>[p[0]-lr*g[0],p[1]-lr*g[1]]}; }
+  if(type==='mom'){ let v=[0,0]; return {step:(p,g)=>{ v=[b1*v[0]+(1-b1)*g[0], b1*v[1]+(1-b1)*g[1]]; return [p[0]-lr*v[0], p[1]-lr*v[1]]; }}; }
+  if(type==='nesterov'){ let v=[0,0]; return {step:(p,g)=>{ v=[b1*v[0]+(1-b1)*g[0], b1*v[1]+(1-b1)*g[1]]; return [p[0]-lr*(b1*v[0]+(1-b1)*g[0]), p[1]-lr*(b1*v[1]+(1-b1)*g[1])]; }}; }
+  // Adam
+  let m=[0,0], v=[0,0], t=0; return {step:(p,g)=>{ t++; m=[b1*m[0]+(1-b1)*g[0], b1*m[1]+(1-b1)*g[1]]; v=[b2*v[0]+(1-b2)*g[0]*g[0], b2*v[1]+(1-b2)*g[1]*g[1]]; const mhat=[m[0]/(1-Math.pow(b1,t)), m[1]/(1-Math.pow(b1,t))]; const vhat=[v[0]/(1-Math.pow(b2,t)), v[1]/(1-Math.pow(b2,t))]; return [p[0]-lr*mhat[0]/(Math.sqrt(vhat[0])+eps), p[1]-lr*mhat[1]/(Math.sqrt(vhat[1])+eps)]; }};
+}
+let optimizer=makeOpt();
+
+// ------------- State & transforms -------------
+const state={x:-3.2,y:3.5,trail:[],loss:[]};
+function clampFinite(v,fb=0){ return Number.isFinite(v)?v:fb; }
+function worldToCanvas(x,y){ const R=+el('range').value; const w=drawC.width, h=drawC.height; return [(x+R)/(2*R)*w, h-(y+R)/(2*R)*h]; }
+function canvasToWorld(cx,cy){ const R=+el('range').value; const w=drawC.width, h=drawC.height; return [ (cx/w)*2*R-R, ((h-cy)/h)*2*R-R ]; }
+
+// ------------- Field rendering (color + contours) -------------
+function palette(t){ const gamma=+el('gamma').value; const cmap=el('cmap').value; t=Math.pow(Math.max(0,Math.min(1,t)),gamma); if(cmap==='viridis'){ const r=Math.round(255*(0.267+2.4*t-2.1*t*t)); const g=Math.round(255*(0.004+2.9*t-2.6*t*t)); const b=Math.round(255*(0.329+1.9*t-1.6*t*t)); return [r,g,b]; } if(cmap==='warmcool'){ const r=Math.round(255*t); const g=Math.round(255*(0.3+0.4*(1-Math.abs(0.5-t)*2))); const b=Math.round(255*(1-t)); return [r,g,b]; } const r=Math.round(255*(0.34+1.5*t-t*t)); const g=Math.round(255*(0.9*t*(1-t)+0.2)); const b=Math.round(255*(1.0-0.9*t)); return [r,g,b]; }
+
+let fieldCache=null; // {N,R,min,max,vals}
+function renderField(){
+  sizeCanvases();
+  const N=+el('res').value; const R=+el('range').value; const fn=getFn();
+  // compute values
+  const vals=new Float32Array(N*N); let min=Infinity,max=-Infinity;
+  for(let iy=0;iy<N;iy++){
+    for(let ix=0;ix<N;ix++){
+      const x=(ix/(N-1))*2*R-R; const y=(1-iy/(N-1))*2*R-R; const v=fn([x,y]).val; vals[iy*N+ix]=v; if(v<min)min=v; if(v>max)max=v;
+    }
+  }
+  fieldCache={N,R,min,max,vals};
+  // draw color map
+  const img=fctx.createImageData(N,N); const span=(max-min)||1; for(let i=0;i<N*N;i++){ const t=(vals[i]-min)/span; const [r,g,b]=palette(t); const k=i*4; img.data[k]=r; img.data[k+1]=g; img.data[k+2]=b; img.data[k+3]=255; }
+  // scale to canvas
+  const off=document.createElement('canvas'); off.width=N; off.height=N; off.getContext('2d').putImageData(img,0,0); fctx.imageSmoothingEnabled=true; fctx.clearRect(0,0,fieldC.width,fieldC.height); fctx.drawImage(off,0,0,fieldC.width,fieldC.height);
+  // contours
+  if(el('contours').value==='on'){ drawContours(fieldCache, +el('levels').value); }
+}
+
+function drawContours(cache, levels){ const {N,min,max,vals}=cache; const span=(max-min)||1; const iso=[]; for(let i=1;i<=levels;i++){ iso.push(min+span*i/(levels+1)); }
+  fctx.save(); fctx.lineWidth=1; fctx.strokeStyle='rgba(15,23,42,0.25)';
+  for(const t of iso){
+    const edges=[];
+    for(let y=0;y<N-1;y++){
+      for(let x=0;x<N-1;x++){
+        const v0=vals[y*N+x]-t, v1=vals[y*N+x+1]-t, v2=vals[(y+1)*N+x+1]-t, v3=vals[(y+1)*N+x]-t;
+        const idx=(v0>0)<<3 | (v1>0)<<2 | (v2>0)<<1 | (v3>0);
+        if(idx===0||idx===15) continue;
+        const lerp=(a,b,va,vb)=> a + (b-a)*(va/(va-vb));
+        const px=x/(N-1)*fieldC.width, py=y/(N-1)*fieldC.height; const px1=(x+1)/(N-1)*fieldC.width, py1=(y+1)/(N-1)*fieldC.height;
+        const pts=[];
+        if((idx&8)!==(idx&4)){ const cx=lerp(px,px1,v0,v1); pts.push([cx,py]); }
+        if((idx&4)!==(idx&2)){ const cy=lerp(py,py1,v1,v2); pts.push([px1,cy]); }
+        if((idx&2)!==(idx&1)){ const cx=lerp(px,px1,v3,v2); pts.push([cx,py1]); }
+        if((idx&1)!==(idx&8)){ const cy=lerp(py,py1,v0,v3); pts.push([px,cy]); }
+        if(pts.length===2){ edges.push(pts); }
+      }
+    }
+    fctx.beginPath(); for(const [[x0,y0],[x1,y1]] of edges){ fctx.moveTo(x0,y0); fctx.lineTo(x1,y1); } fctx.stroke();
+  }
+  fctx.restore();
+}
+
+// ------------- Simulation & chart -------------
+let running=false; let lossHistory=[]; const MAX_POINTS=1000;
+function resetSim(){ running=false; state.trail=[]; state.loss=[]; lossHistory=[]; updateLossChart(); record(); }
+function record(){ const {val}=getFn()([state.x,state.y]); state.trail.push([state.x,state.y]); state.loss.push(val); pushLoss(val); updateInfo(state.x,state.y,val); }
+function stepOnce(){ const noise=+el('noise').value; const {grad}=getFn()([state.x,state.y]); const g=[grad[0]+(Math.random()*2-1)*noise, grad[1]+(Math.random()*2-1)*noise]; const next=optimizer.step([state.x,state.y],g); state.x=clampFinite(next[0],0); state.y=clampFinite(next[1],0); record(); }
+function loop(){ if(!running) return; stepOnce(); renderFrame(); requestAnimationFrame(loop); }
+
+function updateInfo(x,y,f){ el('xv').textContent=x.toFixed(2); el('yv').textContent=y.toFixed(2); el('fv').textContent=f.toFixed(4); }
+// ------------- Rendering of ball + trail + arrow -------------
+function renderFrame(){ dctx.clearRect(0,0,drawC.width,drawC.height); // axes
+  dctx.strokeStyle='rgba(15,23,42,0.12)'; dctx.lineWidth=1; dctx.beginPath(); dctx.moveTo(drawC.width/2,0); dctx.lineTo(drawC.width/2,drawC.height); dctx.moveTo(0,drawC.height/2); dctx.lineTo(drawC.width,drawC.height/2); dctx.stroke();
+  // trail
+  if(state.trail.length>1){ dctx.beginPath(); const [sx,sy]=worldToCanvas(...state.trail[0]); dctx.moveTo(sx,sy); for(let i=1;i<state.trail.length;i++){ const [cx,cy]=worldToCanvas(...state.trail[i]); dctx.lineTo(cx,cy);} dctx.strokeStyle='#ff2d55'; dctx.lineWidth=3; dctx.stroke(); }
+  // ball
+  const [bx,by]=worldToCanvas(state.x,state.y); const grd=dctx.createRadialGradient(bx,by,2,bx,by,10); grd.addColorStop(0,'#fff'); grd.addColorStop(1,'#7c3aed'); dctx.fillStyle=grd; dctx.beginPath(); dctx.arc(bx,by,8,0,Math.PI*2); dctx.fill();
+  // gradient arrow
+  const {grad}=getFn()([state.x,state.y]); const scale=0.18; const [ax,ay]=worldToCanvas(state.x,state.y); const [ex,ey]=worldToCanvas(state.x-grad[0]*scale, state.y-grad[1]*scale); drawArrow(ax,ay,ex,ey,'#06b6d4');
+}
+function drawArrow(x1,y1,x2,y2,color){ const head=10; const ang=Math.atan2(y2-y1,x2-x1); dctx.strokeStyle=color; dctx.fillStyle=color; dctx.lineWidth=2; dctx.beginPath(); dctx.moveTo(x1,y1); dctx.lineTo(x2,y2); dctx.stroke(); dctx.beginPath(); dctx.moveTo(x2,y2); dctx.lineTo(x2-head*Math.cos(ang-0.3), y2-head*Math.sin(ang-0.3)); dctx.lineTo(x2-head*Math.cos(ang+0.3), y2-head*Math.sin(ang+0.3)); dctx.closePath(); dctx.fill(); }
+
+// ------------- Loss mini chart (axes + labels, no deps) -------------
+const lossCanvas=document.getElementById('lossCanvas');
+const lctx=lossCanvas.getContext('2d');
+function pushLoss(v){
+  const smooth=document.getElementById('smoothLoss').checked;
+  const last=lossHistory.length?lossHistory[lossHistory.length-1]:v;
+  const y=smooth?0.7*last+0.3*v:v;
+  lossHistory.push(y);
+  if(lossHistory.length>MAX_POINTS) lossHistory.shift();
+  updateLossChart();
+}
+function niceStep(span){
+  const pow = Math.pow(10, Math.floor(Math.log10(span)));
+  const f = span / pow;
+  let step;
+  if(f <= 1.5) step = 1;
+  else if(f <= 3) step = 2;
+  else if(f <= 7) step = 5;
+  else step = 10;
+  return step * pow;
+}
+function updateLossChart(){
+  const W = lossCanvas.clientWidth || lossCanvas.width;
+  const H = lossCanvas.clientHeight || lossCanvas.height;
+  if(lossCanvas.width!==W || lossCanvas.height!==H){ lossCanvas.width=W; lossCanvas.height=H; }
+  lctx.clearRect(0,0,W,H);
+  // Plot area
+  const M = {l:56, r:12, t:8, b:22};
+  const PW = Math.max(1, W - M.l - M.r);
+  const PH = Math.max(1, H - M.t - M.b);
+  // Data range
+  const log = document.getElementById('logScale').checked;
+  const eps = 1e-8;
+  const vals = lossHistory.length ? lossHistory : [0];
+  let min = Math.min(...vals), max = Math.max(...vals);
+  if(!isFinite(min) || !isFinite(max)) { min = 0; max = 1; }
+  let tmin = log ? Math.log(Math.max(eps, min||eps)) : min;
+  let tmax = log ? Math.log(Math.max(eps, max||eps)) : max;
+  let span = (tmax - tmin) || 1;
+  const zoom = parseFloat((document.getElementById('lossZoom')?.value) || '1');
+  const spanAdj = span / Math.max(zoom, 1e-6);
+  const ttop = tmin + spanAdj;
+  const yMap = (v)=>{
+    const tv = log ? Math.log(Math.max(eps, v||eps)) : v;
+    const tn = Math.min(1, Math.max(0, (tv - tmin) / spanAdj));
+    return M.t + (1 - tn) * PH;
+  };
+  // Axes
+  lctx.strokeStyle = '#94a3b8';
+  lctx.lineWidth = 1;
+  lctx.beginPath(); lctx.moveTo(M.l, M.t); lctx.lineTo(M.l, M.t+PH); lctx.stroke();
+  lctx.beginPath(); lctx.moveTo(M.l, M.t+PH); lctx.lineTo(M.l+PW, M.t+PH); lctx.stroke();
+  lctx.fillStyle = '#64748b';
+  lctx.font = '12px system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial';
+  // Y ticks
+  if(log){
+    const minExp = Math.floor(Math.log10(Math.max(eps, min||eps)));
+    const maxExp = Math.ceil(Math.log10(Math.max(eps, Math.min(Math.exp(ttop), Math.max(min, max)))));
+    for(let e=minExp; e<=maxExp; e++){
+      const val = Math.pow(10, e);
+      const y = yMap(val);
+      lctx.strokeStyle='#94a3b8'; lctx.beginPath(); lctx.moveTo(M.l-4, y); lctx.lineTo(M.l, y); lctx.stroke();
+      lctx.fillText(`1e${e}`, 4, y+4);
+      lctx.strokeStyle='rgba(100,116,139,0.15)'; lctx.beginPath(); lctx.moveTo(M.l+1, y); lctx.lineTo(M.l+PW, y); lctx.stroke();
+    }
+  } else {
+    const vMin = tmin, vMax = ttop;
+    const step = niceStep(vMax - vMin);
+    const start = Math.ceil(vMin/step)*step;
+    for(let v=start; v<=vMax+1e-9; v+=step){
+      const y = yMap(v);
+      lctx.strokeStyle='#94a3b8'; lctx.beginPath(); lctx.moveTo(M.l-4, y); lctx.lineTo(M.l, y); lctx.stroke();
+      lctx.fillText(v.toFixed(2), 4, y+4);
+      lctx.strokeStyle='rgba(100,116,139,0.15)'; lctx.beginPath(); lctx.moveTo(M.l+1, y); lctx.lineTo(M.l+PW, y); lctx.stroke();
+    }
+  }
+  // X ticks (steps)
+  const xticks = 8;
+  const denom = Math.max(1, lossHistory.length-1);
+  for(let i=0;i<=xticks;i++){
+    const idx = Math.round(i * denom / xticks);
+    const x = M.l + (PW * (idx / Math.max(1, denom)));
+    lctx.strokeStyle='#94a3b8'; lctx.beginPath(); lctx.moveTo(x, M.t+PH); lctx.lineTo(x, M.t+PH+4); lctx.stroke();
+    lctx.fillText(String(idx), x-8, M.t+PH+16);
+  }
+  // Loss polyline
+  lctx.strokeStyle='#7c3aed'; lctx.lineWidth=2; lctx.beginPath();
+  for(let i=0;i<lossHistory.length;i++){
+    const x = M.l + PW * (i / Math.max(1, lossHistory.length-1));
+    const y = yMap(lossHistory[i]);
+    if(i===0) lctx.moveTo(x,y); else lctx.lineTo(x,y);
+  }
+  lctx.stroke();
+}
+// re-render when toggles change
+(document.getElementById('logScale'))?.addEventListener('change', updateLossChart);
+(document.getElementById('smoothLoss'))?.addEventListener('change', updateLossChart);
+
+// ------------- Canvas click to set start -------------
+drawC.addEventListener('click', (e)=>{ const r=drawC.getBoundingClientRect(); const x=e.clientX-r.left, y=e.clientY-r.top; [state.x,state.y]=canvasToWorld(x,y); resetSim(); renderFrame(); });
+
+// ------------- Self tests -------------
+function runSelfTests(){ const b=document.getElementById('testBadge'); try{ sizeCanvases(); renderField(); resetSim(); stepOnce(); renderFrame(); if(!isFinite(worldToCanvas(0,0)[0])) throw new Error('non-finite coords'); b.textContent='Self‑tests: pass'; b.classList.add('test-pass'); }catch(err){ console.error(err); b.textContent='Self‑tests: fail'; b.classList.add('test-fail'); }}
+</script>
+</body>
+</html>

@@ -1,0 +1,1213 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Decision Tree Builder</title>
+<script src="../assets/vendor/papaparse-5.4.1.min.js"></script>
+<script src="../assets/vendor/d3-7.8.5.min.js"></script>
+<style>
+:root {
+  --bg: #0b0f14;
+  --panel: #121821;
+  --panel-2: #0f141c;
+  --text: #e8eef6;
+  --muted: #9fb3c8;
+  --accent: #5ab0ff;
+  --accent-2: #8be9a0;
+  --warn: #ffb86b;
+  --danger: #ff6b6b;
+}
+
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+body {
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+  font-size: 14px;
+  background: var(--bg);
+  color: var(--text);
+  overflow: hidden;
+}
+
+#app {
+  display: flex;
+  flex-direction: column;
+  height: 100vh;
+  width: 100vw;
+}
+
+#header {
+  position: sticky;
+  top: 0;
+  background: var(--panel);
+  border-bottom: 1px solid #1a2536;
+  padding: 16px 24px;
+  z-index: 100;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 12px;
+  flex-shrink: 0;
+}
+
+#header h1 {
+  font-size: 18px;
+  font-weight: 600;
+  color: var(--text);
+}
+
+.badges {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.badge {
+  padding: 4px 10px;
+  border-radius: 6px;
+  font-size: 11px;
+  font-weight: 500;
+  background: var(--panel-2);
+  border: 1px solid #1a2536;
+  color: var(--muted);
+  white-space: nowrap;
+}
+
+.badge.task {
+  background: var(--accent);
+  color: var(--bg);
+  border-color: var(--accent);
+}
+
+#content {
+  display: flex;
+  flex: 1;
+  overflow: hidden;
+  min-height: 0;
+}
+
+#controls {
+  width: 330px;
+  flex-shrink: 0;
+  background: var(--panel);
+  border-right: 1px solid #1a2536;
+  overflow-y: auto;
+  padding: 20px;
+}
+
+#viz {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  min-width: 0;
+}
+
+.panel {
+  background: var(--panel);
+  border: 1px solid #1a2536;
+  border-radius: 14px;
+  padding: 16px;
+  box-shadow: inset 0 1px 2px rgba(0,0,0,0.1);
+  margin-bottom: 16px;
+}
+
+.panel h3 {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--accent);
+  margin-bottom: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.form-group {
+  margin-bottom: 14px;
+}
+
+label {
+  display: block;
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--muted);
+  margin-bottom: 6px;
+}
+
+input[type="file"],
+input[type="number"],
+select,
+textarea {
+  width: 100%;
+  background: var(--panel-2);
+  border: 1px solid #1a2536;
+  border-radius: 10px;
+  padding: 10px 12px;
+  color: var(--text);
+  font-size: 13px;
+  font-family: inherit;
+  transition: all 0.2s;
+}
+
+input:focus,
+select:focus,
+textarea:focus {
+  outline: none;
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px rgba(90, 176, 255, 0.1);
+}
+
+textarea {
+  resize: vertical;
+  min-height: 80px;
+  font-family: 'Courier New', monospace;
+  font-size: 11px;
+}
+
+.hint {
+  font-size: 11px;
+  color: var(--muted);
+  margin-top: 4px;
+  font-style: italic;
+}
+
+.settings-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+  margin-bottom: 14px;
+}
+
+.settings-grid .form-group {
+  margin-bottom: 0;
+}
+
+button {
+  width: 100%;
+  padding: 11px 16px;
+  border: none;
+  border-radius: 10px;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s;
+  font-family: inherit;
+}
+
+button.primary {
+  background: linear-gradient(135deg, var(--accent) 0%, #4a9fe8 100%);
+  color: white;
+  margin-bottom: 8px;
+}
+
+button.primary:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(90, 176, 255, 0.3);
+}
+
+button.secondary {
+  background: var(--panel-2);
+  color: var(--text);
+  border: 1px solid #1a2536;
+}
+
+button.secondary:hover {
+  background: #171d2a;
+  border-color: var(--accent);
+}
+
+button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+details {
+  background: var(--panel-2);
+  border: 1px solid #1a2536;
+  border-radius: 10px;
+  padding: 12px;
+  margin-top: 16px;
+}
+
+summary {
+  cursor: pointer;
+  font-weight: 600;
+  font-size: 12px;
+  color: var(--accent);
+  user-select: none;
+}
+
+details[open] summary {
+  margin-bottom: 12px;
+}
+
+.footer-tip {
+  margin-top: 16px;
+  padding: 12px;
+  background: var(--panel-2);
+  border-radius: 10px;
+  font-size: 11px;
+  color: var(--muted);
+  line-height: 1.5;
+}
+
+#viz-toolbar {
+  padding: 16px 24px;
+  background: var(--panel);
+  border-bottom: 1px solid #1a2536;
+  font-size: 12px;
+  color: var(--muted);
+  flex-shrink: 0;
+}
+
+#tree-container {
+  flex: 1;
+  overflow: auto;
+  background: var(--bg);
+  position: relative;
+  min-height: 0;
+}
+
+#tree {
+  display: block;
+}
+
+#preview-container {
+  height: 250px;
+  flex-shrink: 0;
+  overflow: auto;
+  background: var(--panel);
+  border-top: 1px solid #1a2536;
+}
+
+table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 12px;
+}
+
+thead {
+  position: sticky;
+  top: 0;
+  background: var(--panel-2);
+  z-index: 10;
+}
+
+th {
+  padding: 10px 12px;
+  text-align: left;
+  font-weight: 600;
+  color: var(--accent);
+  border-bottom: 2px solid #1a2536;
+}
+
+td {
+  padding: 8px 12px;
+  border-bottom: 1px solid #1a2536;
+  color: var(--text);
+}
+
+tr:hover td {
+  background: var(--panel-2);
+}
+
+.tooltip {
+  position: fixed;
+  background: rgba(18, 24, 33, 0.98);
+  border: 1px solid var(--accent);
+  border-radius: 8px;
+  padding: 10px 12px;
+  font-size: 11px;
+  pointer-events: none;
+  z-index: 1000;
+  max-width: 300px;
+  box-shadow: 0 8px 24px rgba(0,0,0,0.4);
+  display: none;
+}
+
+.tooltip-row {
+  margin: 3px 0;
+  color: var(--text);
+}
+
+.tooltip-label {
+  color: var(--muted);
+  font-weight: 600;
+}
+
+svg {
+  display: block;
+}
+
+.node circle {
+  stroke: #2a3a52;
+  stroke-width: 2.5;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.node circle:hover {
+  stroke: var(--accent);
+  stroke-width: 3;
+}
+
+.node text {
+  font-size: 12px;
+  fill: var(--text);
+  pointer-events: none;
+}
+
+.node text.label {
+  font-weight: 600;
+}
+
+.node text.sublabel {
+  fill: var(--muted);
+  font-size: 11px;
+}
+
+.link {
+  fill: none;
+  stroke: #2a3a52;
+  stroke-width: 2;
+  opacity: 0.6;
+}
+
+.highlighted {
+  stroke: var(--accent-2) !important;
+  stroke-width: 4 !important;
+  opacity: 1 !important;
+  filter: drop-shadow(0 0 8px var(--accent-2));
+}
+
+.highlighted-node circle {
+  stroke: var(--accent-2) !important;
+  stroke-width: 4 !important;
+  filter: drop-shadow(0 0 8px var(--accent-2));
+}
+</style>
+<link rel="stylesheet" href="../assets/lab-theme.css">
+<script defer src="../assets/lab-bridge.js"></script>
+</head>
+<body>
+<aside class="sg-context-note">CSV processing happens in your browser. This page does not upload your dataset.</aside>
+
+<div id="app">
+  <div id="header">
+    <h1>Decision Tree Builder · Interactive</h1>
+    <div class="badges">
+      <span class="badge task" id="task-badge">Classification</span>
+      <span class="badge">Node color = impurity</span>
+      <span class="badge">Numeric + Categorical</span>
+      <span class="badge">Path highlighting</span>
+    </div>
+  </div>
+
+  <div id="content">
+    <div id="controls">
+      <div class="panel">
+        <h3>Upload CSV</h3>
+        <div class="form-group">
+          <input type="file" id="file-input" accept=".csv">
+          <div class="hint">Header row required. Missing values ignored per split.</div>
+        </div>
+      </div>
+
+      <div class="panel">
+        <h3>Paste CSV</h3>
+        <div class="form-group">
+          <textarea id="paste-area" placeholder="Paste CSV data here..."></textarea>
+        </div>
+        <button class="secondary" id="load-paste">Load Pasted CSV</button>
+      </div>
+
+      <div class="panel">
+        <h3>Target Column</h3>
+        <div class="form-group">
+          <select id="target-select">
+            <option value="">Select target...</option>
+          </select>
+        </div>
+      </div>
+
+      <div class="panel">
+        <h3>Settings</h3>
+        <div class="settings-grid">
+          <div class="form-group">
+            <label for="criterion">Criterion</label>
+            <select id="criterion">
+              <option value="gini">Gini</option>
+              <option value="entropy">Entropy</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label for="max-depth">Max Depth</label>
+            <input type="number" id="max-depth" value="4" min="1" max="30">
+          </div>
+          <div class="form-group">
+            <label for="min-split">Min Split</label>
+            <input type="number" id="min-split" value="2" min="2">
+          </div>
+          <div class="form-group">
+            <label for="min-gain">Min Gain</label>
+            <input type="number" id="min-gain" value="0" step="0.0001">
+          </div>
+        </div>
+        <div class="hint">Criterion used only for categorical targets. Numeric targets use MSE.</div>
+      </div>
+
+      <button class="primary" id="build-btn">Build Tree</button>
+      <button class="secondary" id="export-svg">Export SVG</button>
+      <button class="secondary" id="export-json">Export JSON</button>
+
+      <details>
+        <summary>Inspect a Row</summary>
+        <div class="form-group">
+          <label for="row-index">Row Index (0-based)</label>
+          <input type="number" id="row-index" value="0" min="0">
+        </div>
+        <button class="secondary" id="highlight-path">Highlight Path</button>
+      </details>
+
+      <div class="footer-tip">
+        <strong>Task Type:</strong> Classification when target is categorical. Regression when target is numeric with >12 unique values.
+      </div>
+    </div>
+
+    <div id="viz">
+      <div id="viz-toolbar">
+        <span id="status">Load a dataset to begin</span>
+      </div>
+      <div id="tree-container">
+        <svg id="tree"></svg>
+      </div>
+      <div id="preview-container">
+        <table id="preview-table">
+          <thead></thead>
+          <tbody></tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="tooltip" id="tooltip"></div>
+
+<script>
+// Demo data
+const DEMO_CSV = `sepal_length,sepal_width,petal_length,petal_width,species
+5.1,3.5,1.4,0.2,setosa
+4.9,3.0,1.4,0.2,setosa
+5.8,2.7,5.1,1.9,virginica
+6.0,2.7,5.1,1.6,virginica
+6.3,3.3,4.7,1.6,versicolor
+6.4,3.2,4.5,1.5,versicolor
+5.0,3.4,1.5,0.2,setosa
+4.7,3.2,1.3,0.2,setosa
+6.7,3.1,4.4,1.4,versicolor
+5.5,2.3,4.0,1.3,versicolor
+6.5,3.0,5.8,2.2,virginica
+7.7,3.8,6.7,2.2,virginica`;
+
+// State
+let dataset = [];
+let headers = [];
+let target = '';
+let task = 'classification';
+let types = {};
+let tree = null;
+let treeData = null;
+
+// DOM elements
+const fileInput = document.getElementById('file-input');
+const pasteArea = document.getElementById('paste-area');
+const loadPasteBtn = document.getElementById('load-paste');
+const targetSelect = document.getElementById('target-select');
+const criterionSelect = document.getElementById('criterion');
+const maxDepthInput = document.getElementById('max-depth');
+const minSplitInput = document.getElementById('min-split');
+const minGainInput = document.getElementById('min-gain');
+const buildBtn = document.getElementById('build-btn');
+const exportSvgBtn = document.getElementById('export-svg');
+const exportJsonBtn = document.getElementById('export-json');
+const rowIndexInput = document.getElementById('row-index');
+const highlightPathBtn = document.getElementById('highlight-path');
+const taskBadge = document.getElementById('task-badge');
+const status = document.getElementById('status');
+const tooltip = document.getElementById('tooltip');
+
+// Initialize with demo data
+loadCSV(DEMO_CSV);
+
+// Resize handler
+let resizeTimeout;
+window.addEventListener('resize', () => {
+  clearTimeout(resizeTimeout);
+  resizeTimeout = setTimeout(() => {
+    if (tree) renderTree();
+  }, 250);
+});
+
+// Event listeners
+fileInput.addEventListener('change', (e) => {
+  const file = e.target.files[0];
+  if (file) {
+    const reader = new FileReader();
+    reader.onload = (ev) => loadCSV(ev.target.result);
+    reader.readAsText(file);
+  }
+});
+
+loadPasteBtn.addEventListener('click', () => {
+  const text = pasteArea.value.trim();
+  if (text) loadCSV(text);
+});
+
+targetSelect.addEventListener('change', () => {
+  target = targetSelect.value;
+  if (target) {
+    detectTask();
+    buildTree();
+  }
+});
+
+[criterionSelect, maxDepthInput, minSplitInput, minGainInput].forEach(el => {
+  el.addEventListener('change', () => {
+    if (target && dataset.length > 0) buildTree();
+  });
+});
+
+buildBtn.addEventListener('click', () => {
+  if (target && dataset.length > 0) buildTree();
+});
+
+exportSvgBtn.addEventListener('click', exportSVG);
+exportJsonBtn.addEventListener('click', exportJSON);
+highlightPathBtn.addEventListener('click', highlightRowPath);
+
+// Load and parse CSV
+function loadCSV(csvText) {
+  Papa.parse(csvText, {
+    header: true,
+    skipEmptyLines: true,
+    complete: (results) => {
+      dataset = results.data.filter(row => Object.values(row).some(v => v !== ''));
+      headers = results.meta.fields || [];
+      
+      targetSelect.innerHTML = '<option value="">Select target...</option>';
+      headers.forEach(h => {
+        const opt = document.createElement('option');
+        opt.value = h;
+        opt.textContent = h;
+        targetSelect.appendChild(opt);
+      });
+      
+      if (headers.length > 0) {
+        targetSelect.value = headers[headers.length - 1];
+        target = headers[headers.length - 1];
+        detectTask();
+        buildTree();
+      }
+      
+      renderPreview();
+    }
+  });
+}
+
+// Detect task type
+function detectTask() {
+  const values = dataset
+    .map(row => row[target])
+    .filter(v => v !== '' && v != null);
+  
+  const numericCount = values.filter(v => !isNaN(parseFloat(v))).length;
+  const numericRatio = numericCount / values.length;
+  const uniqueCount = new Set(values).size;
+  
+  if (numericRatio >= 0.8 && uniqueCount > 12) {
+    task = 'regression';
+    taskBadge.textContent = 'Regression (MSE)';
+    criterionSelect.disabled = true;
+  } else {
+    task = 'classification';
+    taskBadge.textContent = 'Classification';
+    criterionSelect.disabled = false;
+  }
+}
+
+// Detect feature types
+function detectTypes() {
+  types = {};
+  headers.forEach(col => {
+    if (col === target) return;
+    
+    const values = dataset
+      .map(row => row[col])
+      .filter(v => v !== '' && v != null);
+    
+    if (values.length === 0) return;
+    
+    const numericCount = values.filter(v => !isNaN(parseFloat(v))).length;
+    types[col] = (numericCount / values.length) > 0.7 ? 'numeric' : 'categorical';
+  });
+}
+
+// Calculate impurity
+function calcImpurity(labels, criterion) {
+  if (labels.length === 0) return 0;
+  
+  if (task === 'regression') {
+    const mean = labels.reduce((a, b) => a + b, 0) / labels.length;
+    return labels.reduce((sum, y) => sum + Math.pow(y - mean, 2), 0) / labels.length;
+  } else {
+    const counts = {};
+    labels.forEach(l => counts[l] = (counts[l] || 0) + 1);
+    const probs = Object.values(counts).map(c => c / labels.length);
+    
+    if (criterion === 'gini') {
+      return 1 - probs.reduce((sum, p) => sum + p * p, 0);
+    } else {
+      return -probs.reduce((sum, p) => sum + (p > 0 ? p * Math.log2(p) : 0), 0);
+    }
+  }
+}
+
+// Find best split for numeric feature
+function findNumericSplit(rows, feature, labels, criterion) {
+  const pairs = [];
+  rows.forEach((row, i) => {
+    const val = parseFloat(row[feature]);
+    if (!isNaN(val)) {
+      pairs.push({ val, label: labels[i] });
+    }
+  });
+  
+  if (pairs.length < 2) return null;
+  
+  pairs.sort((a, b) => a.val - b.val);
+  
+  const uniqueVals = [...new Set(pairs.map(p => p.val))].sort((a, b) => a - b);
+  if (uniqueVals.length < 2) return null;
+  
+  let bestGain = -Infinity;
+  let bestThreshold = null;
+  
+  for (let i = 0; i < uniqueVals.length - 1; i++) {
+    const threshold = (uniqueVals[i] + uniqueVals[i + 1]) / 2;
+    const leftLabels = pairs.filter(p => p.val <= threshold).map(p => p.label);
+    const rightLabels = pairs.filter(p => p.val > threshold).map(p => p.label);
+    
+    if (leftLabels.length === 0 || rightLabels.length === 0) continue;
+    
+    const impParent = calcImpurity(labels, criterion);
+    const impLeft = calcImpurity(leftLabels, criterion);
+    const impRight = calcImpurity(rightLabels, criterion);
+    
+    const gain = impParent - (
+      (leftLabels.length / labels.length) * impLeft +
+      (rightLabels.length / labels.length) * impRight
+    );
+    
+    if (gain > bestGain) {
+      bestGain = gain;
+      bestThreshold = threshold;
+    }
+  }
+  
+  return bestThreshold !== null ? { threshold: bestThreshold, gain: bestGain } : null;
+}
+
+// Find best split for categorical feature
+function findCategoricalSplit(rows, feature, labels, criterion) {
+  const categories = [...new Set(rows.map(r => r[feature]).filter(v => v !== '' && v != null))];
+  if (categories.length < 2) return null;
+  
+  let bestGain = -Infinity;
+  let bestCategory = null;
+  
+  categories.forEach(cat => {
+    const leftLabels = [];
+    const rightLabels = [];
+    
+    rows.forEach((row, i) => {
+      if (row[feature] === cat) {
+        leftLabels.push(labels[i]);
+      } else if (row[feature] !== '' && row[feature] != null) {
+        rightLabels.push(labels[i]);
+      }
+    });
+    
+    if (leftLabels.length === 0 || rightLabels.length === 0) return;
+    
+    const impParent = calcImpurity(labels, criterion);
+    const impLeft = calcImpurity(leftLabels, criterion);
+    const impRight = calcImpurity(rightLabels, criterion);
+    
+    const gain = impParent - (
+      (leftLabels.length / labels.length) * impLeft +
+      (rightLabels.length / labels.length) * impRight
+    );
+    
+    if (gain > bestGain) {
+      bestGain = gain;
+      bestCategory = cat;
+    }
+  });
+  
+  return bestCategory !== null ? { category: bestCategory, gain: bestGain } : null;
+}
+
+// Build decision tree
+function buildDecisionTree(rows, depth, criterion, maxDepth, minSplit, minGain) {
+  const labels = task === 'regression'
+    ? rows.map(r => parseFloat(r[target])).filter(v => !isNaN(v))
+    : rows.map(r => r[target]).filter(v => v !== '' && v != null);
+  
+  if (labels.length === 0) {
+    return {
+      type: 'leaf',
+      depth,
+      samples: 0,
+      impurity: 0,
+      prediction: task === 'regression' ? 0 : 'unknown',
+      std: 0
+    };
+  }
+  
+  const impurity = calcImpurity(labels, criterion);
+  
+  if (depth >= maxDepth || rows.length < minSplit) {
+    return makeLeaf(labels, depth, impurity);
+  }
+  
+  if (task === 'classification' && new Set(labels).size === 1) {
+    return makeLeaf(labels, depth, impurity);
+  }
+  
+  let bestSplit = null;
+  let bestFeature = null;
+  let bestType = null;
+  
+  Object.keys(types).forEach(feature => {
+    if (types[feature] === 'numeric') {
+      const split = findNumericSplit(rows, feature, labels, criterion);
+      if (split && split.gain > (bestSplit?.gain || -Infinity)) {
+        bestSplit = split;
+        bestFeature = feature;
+        bestType = 'numeric';
+      }
+    } else {
+      const split = findCategoricalSplit(rows, feature, labels, criterion);
+      if (split && split.gain > (bestSplit?.gain || -Infinity)) {
+        bestSplit = split;
+        bestFeature = feature;
+        bestType = 'categorical';
+      }
+    }
+  });
+  
+  if (!bestSplit || bestSplit.gain < minGain) {
+    return makeLeaf(labels, depth, impurity);
+  }
+  
+  let leftRows, rightRows;
+  
+  if (bestType === 'numeric') {
+    leftRows = rows.filter(r => {
+      const val = parseFloat(r[bestFeature]);
+      return !isNaN(val) && val <= bestSplit.threshold;
+    });
+    rightRows = rows.filter(r => {
+      const val = parseFloat(r[bestFeature]);
+      return !isNaN(val) && val > bestSplit.threshold;
+    });
+  } else {
+    leftRows = rows.filter(r => r[bestFeature] === bestSplit.category);
+    rightRows = rows.filter(r => r[bestFeature] !== bestSplit.category && r[bestFeature] !== '' && r[bestFeature] != null);
+  }
+  
+  if (leftRows.length === 0 || rightRows.length === 0) {
+    return makeLeaf(labels, depth, impurity);
+  }
+  
+  return {
+    type: 'node',
+    depth,
+    samples: labels.length,
+    impurity,
+    split: {
+      feature: bestFeature,
+      type: bestType,
+      threshold: bestSplit.threshold,
+      category: bestSplit.category,
+      gain: bestSplit.gain,
+      impurity
+    },
+    left: buildDecisionTree(leftRows, depth + 1, criterion, maxDepth, minSplit, minGain),
+    right: buildDecisionTree(rightRows, depth + 1, criterion, maxDepth, minSplit, minGain)
+  };
+}
+
+function makeLeaf(labels, depth, impurity) {
+  if (task === 'regression') {
+    const mean = labels.reduce((a, b) => a + b, 0) / labels.length;
+    const variance = labels.reduce((sum, y) => sum + Math.pow(y - mean, 2), 0) / labels.length;
+    const std = Math.sqrt(variance);
+    
+    return {
+      type: 'leaf',
+      depth,
+      samples: labels.length,
+      impurity,
+      prediction: mean,
+      std
+    };
+  } else {
+    const counts = {};
+    labels.forEach(l => counts[l] = (counts[l] || 0) + 1);
+    const prediction = Object.keys(counts).reduce((a, b) => counts[a] > counts[b] ? a : b);
+    
+    return {
+      type: 'leaf',
+      depth,
+      samples: labels.length,
+      impurity,
+      prediction,
+      counts
+    };
+  }
+}
+
+function buildTree() {
+  if (!target || dataset.length === 0) return;
+  
+  detectTypes();
+  
+  if (Object.keys(types).length === 0) {
+    alert('No valid features found for splitting');
+    return;
+  }
+  
+  const criterion = criterionSelect.value;
+  const maxDepth = parseInt(maxDepthInput.value);
+  const minSplit = parseInt(minSplitInput.value);
+  const minGain = parseFloat(minGainInput.value);
+  
+  tree = buildDecisionTree(dataset, 0, criterion, maxDepth, minSplit, minGain);
+  
+  const nodeCount = countNodes(tree);
+  const criterionLabel = task === 'regression' ? 'mse' : criterion;
+  status.textContent = `Built ${task} tree · depth ≤ ${maxDepth} · nodes: ${nodeCount} · criterion: ${criterionLabel}`;
+  
+  renderTree();
+}
+
+function countNodes(node) {
+  if (!node) return 0;
+  return 1 + (node.left ? countNodes(node.left) : 0) + (node.right ? countNodes(node.right) : 0);
+}
+
+function renderTree() {
+  if (!tree) return;
+  
+  const container = document.getElementById('tree-container');
+  const mount = document.getElementById('tree');
+  
+  const containerWidth = container.clientWidth;
+  const containerHeight = container.clientHeight;
+  
+  const nodeCount = countNodes(tree);
+  const width = Math.max(containerWidth, 800);
+  const height = Math.max(containerHeight, nodeCount * 50, 600);
+  
+  d3.select('#tree').selectAll('*').remove();
+  
+  const svg = d3.select('#tree')
+    .attr('width', width)
+    .attr('height', height);
+  
+  const g = svg.append('g')
+    .attr('transform', 'translate(60, 40)');
+  
+  const hierarchyData = d3.hierarchy(tree, d => {
+    const children = [];
+    if (d.left) children.push(d.left);
+    if (d.right) children.push(d.right);
+    return children.length > 0 ? children : null;
+  });
+  
+  const treeLayout = d3.tree()
+    .size([height - 80, width - 300])
+    .separation((a, b) => (a.parent === b.parent ? 1.2 : 1.5));
+  
+  treeLayout(hierarchyData);
+  
+  const allImpurities = [];
+  hierarchyData.each(d => allImpurities.push(d.data.impurity));
+  const minImp = Math.min(...allImpurities);
+  const maxImp = Math.max(...allImpurities);
+  
+  const colorScale = d3.scaleLinear()
+    .domain([minImp, maxImp])
+    .range(['#8be9a0', '#ff6b6b'])
+    .clamp(true);
+  
+  if (minImp === maxImp) {
+    colorScale.domain([0, 1]).range(['#8be9a0', '#8be9a0']);
+  }
+  
+  g.selectAll('.link')
+    .data(hierarchyData.links())
+    .enter()
+    .append('path')
+    .attr('class', 'link')
+    .attr('d', d3.linkHorizontal()
+      .x(d => d.y)
+      .y(d => d.x));
+  
+  const nodes = g.selectAll('.node')
+    .data(hierarchyData.descendants())
+    .enter()
+    .append('g')
+    .attr('class', 'node')
+    .attr('transform', d => `translate(${d.y},${d.x})`)
+    .on('mouseover', showTooltip)
+    .on('mousemove', moveTooltip)
+    .on('mouseout', hideTooltip);
+  
+  nodes.append('circle')
+    .attr('r', 10)
+    .attr('fill', d => colorScale(d.data.impurity));
+  
+  nodes.append('text')
+    .attr('class', 'label')
+    .attr('dy', -18)
+    .attr('text-anchor', 'middle')
+    .text(d => {
+      if (d.data.type === 'leaf') {
+        const pred = task === 'regression' ? d.data.prediction.toFixed(3) : d.data.prediction;
+        return `Leaf: ${pred}`;
+      } else {
+        const { feature, type, threshold, category } = d.data.split;
+        if (type === 'numeric') {
+          return `${feature} ≤ ${formatNumber(threshold)}`;
+        } else {
+          return `${feature} = ${category}`;
+        }
+      }
+    });
+  
+  nodes.append('text')
+    .attr('class', 'sublabel')
+    .attr('dy', 28)
+    .attr('text-anchor', 'middle')
+    .text(d => {
+      if (d.data.type === 'leaf') {
+        if (task === 'regression') {
+          return `n=${d.data.samples} · σ=${d.data.std.toFixed(2)}`;
+        } else {
+          return `n=${d.data.samples}`;
+        }
+      } else {
+        return `gain=${d.data.split.gain.toFixed(3)} · n=${d.data.samples}`;
+      }
+    });
+  
+  const zoom = d3.zoom()
+    .scaleExtent([0.3, 3])
+    .on('zoom', (event) => {
+      g.attr('transform', event.transform);
+    });
+  
+  svg.call(zoom);
+  
+  treeData = hierarchyData;
+}
+
+function formatNumber(n) {
+  if (Math.abs(n) < 0.001 || Math.abs(n) > 1e6) {
+    return n.toExponential(2);
+  }
+  return n.toFixed(3);
+}
+
+function showTooltip(event, d) {
+  const lines = [];
+  
+  if (d.data.type === 'leaf') {
+    const impLabel = task === 'regression' ? 'MSE' : 'Impurity';
+    lines.push(`<div class="tooltip-row"><span class="tooltip-label">${impLabel}:</span> ${d.data.impurity.toFixed(4)}</div>`);
+    lines.push(`<div class="tooltip-row"><span class="tooltip-label">Samples:</span> ${d.data.samples}</div>`);
+    lines.push(`<div class="tooltip-row"><span class="tooltip-label">Prediction:</span> ${task === 'regression' ? d.data.prediction.toFixed(4) : d.data.prediction}</div>`);
+    
+    if (task === 'classification' && d.data.counts) {
+      lines.push(`<div class="tooltip-row"><span class="tooltip-label">Counts:</span> ${JSON.stringify(d.data.counts)}</div>`);
+    }
+  } else {
+    const { feature, type, threshold, category, gain } = d.data.split;
+    const rule = type === 'numeric' ? `${feature} ≤ ${formatNumber(threshold)}` : `${feature} = ${category}`;
+    const impLabel = task === 'regression' ? 'MSE' : 'Impurity';
+    
+    lines.push(`<div class="tooltip-row"><span class="tooltip-label">Split:</span> ${rule}</div>`);
+    lines.push(`<div class="tooltip-row"><span class="tooltip-label">Gain:</span> ${gain.toFixed(4)}</div>`);
+    lines.push(`<div class="tooltip-row"><span class="tooltip-label">${impLabel}:</span> ${d.data.impurity.toFixed(4)}</div>`);
+    lines.push(`<div class="tooltip-row"><span class="tooltip-label">Samples:</span> ${d.data.samples}</div>`);
+  }
+  
+  tooltip.innerHTML = lines.join('');
+  tooltip.style.display = 'block';
+  moveTooltip(event);
+}
+
+function moveTooltip(event) {
+  tooltip.style.left = (event.pageX + 15) + 'px';
+  tooltip.style.top = (event.pageY + 15) + 'px';
+}
+
+function hideTooltip() {
+  tooltip.style.display = 'none';
+}
+
+function highlightRowPath() {
+  if (!tree || !treeData) return;
+  
+  const idx = parseInt(rowIndexInput.value);
+  if (idx < 0 || idx >= dataset.length) {
+    alert('Invalid row index');
+    return;
+  }
+  
+  const row = dataset[idx];
+  const path = [];
+  
+  function walk(node, hierNode) {
+    path.push(hierNode);
+    
+    if (node.type === 'leaf') return;
+    
+    const { feature, type, threshold, category } = node.split;
+    let goLeft = false;
+    
+    if (type === 'numeric') {
+      const val = parseFloat(row[feature]);
+      goLeft = !isNaN(val) && val <= threshold;
+    } else {
+      goLeft = row[feature] === category;
+    }
+    
+    const nextNode = goLeft ? node.left : node.right;
+    const nextHierNode = hierNode.children ? hierNode.children[goLeft ? 0 : 1] : null;
+    
+    if (nextNode && nextHierNode) {
+      walk(nextNode, nextHierNode);
+    }
+  }
+  
+  walk(tree, treeData);
+  
+  d3.selectAll('.node').classed('highlighted-node', false);
+  d3.selectAll('.link').classed('highlighted', false);
+  
+  path.forEach(n => {
+    d3.selectAll('.node')
+      .filter(d => d === n)
+      .classed('highlighted-node', true);
+  });
+  
+  for (let i = 0; i < path.length - 1; i++) {
+    d3.selectAll('.link')
+      .filter(l => l.source === path[i] && l.target === path[i + 1])
+      .classed('highlighted', true);
+  }
+}
+
+function renderPreview() {
+  const table = document.getElementById('preview-table');
+  const thead = table.querySelector('thead');
+  const tbody = table.querySelector('tbody');
+  
+  thead.innerHTML = '';
+  tbody.innerHTML = '';
+  
+  if (headers.length === 0) return;
+  
+  const headerRow = document.createElement('tr');
+  headers.forEach(h => {
+    const th = document.createElement('th');
+    th.textContent = h;
+    headerRow.appendChild(th);
+  });
+  thead.appendChild(headerRow);
+  
+  const previewRows = dataset.slice(0, 200);
+  previewRows.forEach(row => {
+    const tr = document.createElement('tr');
+    headers.forEach(h => {
+      const td = document.createElement('td');
+      td.textContent = row[h] || '';
+      tr.appendChild(td);
+    });
+    tbody.appendChild(tr);
+  });
+}
+
+function exportSVG() {
+  const svg = document.getElementById('tree');
+  if (!svg || !svg.innerHTML.trim()) {
+    alert('No tree to export');
+    return;
+  }
+  
+  const serializer = new XMLSerializer();
+  const svgStr = serializer.serializeToString(svg);
+  const blob = new Blob([svgStr], { type: 'image/svg+xml' });
+  const url = URL.createObjectURL(blob);
+  
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = 'decision_tree.svg';
+  a.click();
+  
+  URL.revokeObjectURL(url);
+}
+
+function exportJSON() {
+  if (!tree) {
+    alert('No tree to export');
+    return;
+  }
+  
+  const opts = {
+    criterion: criterionSelect.value,
+    maxDepth: parseInt(maxDepthInput.value),
+    minSplit: parseInt(minSplitInput.value),
+    minGain: parseFloat(minGainInput.value)
+  };
+  
+  const data = {
+    tree,
+    target,
+    opts,
+    types,
+    task
+  };
+  
+  const json = JSON.stringify(data, null, 2);
+  const blob = new Blob([json], { type: 'application/json' });
+  const url = URL.createObjectURL(blob);
+  
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = 'decision_tree.json';
+  a.click();
+  
+  URL.revokeObjectURL(url);
+}
+</script>
+
+</body>
+</html>

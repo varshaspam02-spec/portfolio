@@ -1,0 +1,298 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Clustering Algorithms Comparison</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            padding: 40px;
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        
+        .container {
+            background: white;
+            border-radius: 16px;
+            padding: 40px;
+            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+            max-width: 1400px;
+            width: 100%;
+        }
+        
+        h1 {
+            font-size: 32px;
+            font-weight: 700;
+            color: #1a202c;
+            margin-bottom: 30px;
+            text-align: center;
+            letter-spacing: -0.5px;
+        }
+        
+        .table-wrapper {
+            overflow-x: auto;
+        }
+        
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 14px;
+        }
+        
+        thead {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+        }
+        
+        th {
+            padding: 16px 12px;
+            text-align: left;
+            font-weight: 600;
+            font-size: 13px;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            border-right: 1px solid rgba(255, 255, 255, 0.2);
+        }
+        
+        th:last-child {
+            border-right: none;
+        }
+        
+        td {
+            padding: 16px 12px;
+            border-bottom: 1px solid #e2e8f0;
+            color: #2d3748;
+            line-height: 1.6;
+        }
+        
+        tbody tr {
+            transition: all 0.2s ease;
+        }
+        
+        tbody tr:hover {
+            background: #f7fafc;
+            transform: scale(1.01);
+        }
+        
+        tbody tr:last-child td {
+            border-bottom: none;
+        }
+        
+        .algorithm-name {
+            font-weight: 700;
+            color: #1a202c;
+            font-size: 15px;
+        }
+        
+        .type-centroid {
+            background: #e6fffa;
+            color: #047857;
+            padding: 4px 10px;
+            border-radius: 12px;
+            font-size: 12px;
+            font-weight: 600;
+            display: inline-block;
+        }
+        
+        .type-hierarchical {
+            background: #fef3c7;
+            color: #b45309;
+            padding: 4px 10px;
+            border-radius: 12px;
+            font-size: 12px;
+            font-weight: 600;
+            display: inline-block;
+        }
+        
+        .type-density {
+            background: #dbeafe;
+            color: #1e40af;
+            padding: 4px 10px;
+            border-radius: 12px;
+            font-size: 12px;
+            font-weight: 600;
+            display: inline-block;
+        }
+        
+        .type-graph {
+            background: #fce7f3;
+            color: #be185d;
+            padding: 4px 10px;
+            border-radius: 12px;
+            font-size: 12px;
+            font-weight: 600;
+            display: inline-block;
+        }
+        
+        .shape-spherical {
+            color: #0891b2;
+        }
+        
+        .shape-flexible, .shape-arbitrary {
+            color: #059669;
+        }
+        
+        .outliers-sensitive {
+            color: #dc2626;
+        }
+        
+        .outliers-robust, .outliers-moderate, .outliers-depends {
+            color: #059669;
+        }
+        
+        .scalability-excellent {
+            color: #059669;
+            font-weight: 600;
+        }
+        
+        .scalability-good {
+            color: #0891b2;
+        }
+        
+        .scalability-poor {
+            color: #dc2626;
+        }
+        
+        .parameters {
+            font-family: 'Courier New', monospace;
+            background: #f1f5f9;
+            padding: 4px 8px;
+            border-radius: 6px;
+            font-size: 12px;
+        }
+    </style>
+<link rel="stylesheet" href="../assets/lab-theme.css">
+<script defer src="../assets/lab-bridge.js"></script>
+</head>
+<body>
+    <div class="container">
+        <h1>Comparative Summary Table</h1>
+        <div class="table-wrapper">
+            <table>
+                <thead>
+                    <tr>
+                        <th>Algorithm</th>
+                        <th>Type</th>
+                        <th>Clusters Shape</th>
+                        <th>Outliers</th>
+                        <th>Scalability</th>
+                        <th>Parameters</th>
+                        <th>Best For</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td class="algorithm-name">K-Means</td>
+                        <td><span class="type-centroid">Centroid</span></td>
+                        <td class="shape-spherical">Spherical</td>
+                        <td class="outliers-sensitive">Sensitive</td>
+                        <td class="scalability-excellent">Excellent</td>
+                        <td><span class="parameters">k</span></td>
+                        <td>Large datasets, spherical clusters</td>
+                    </tr>
+                    <tr>
+                        <td class="algorithm-name">K-Means++</td>
+                        <td><span class="type-centroid">Centroid</span></td>
+                        <td class="shape-spherical">Spherical</td>
+                        <td class="outliers-sensitive">Sensitive</td>
+                        <td class="scalability-excellent">Excellent</td>
+                        <td><span class="parameters">k</span></td>
+                        <td>Better initialization than K-Means</td>
+                    </tr>
+                    <tr>
+                        <td class="algorithm-name">Mini-Batch K-Means</td>
+                        <td><span class="type-centroid">Centroid</span></td>
+                        <td class="shape-spherical">Spherical</td>
+                        <td class="outliers-sensitive">Sensitive</td>
+                        <td class="scalability-excellent">Excellent++</td>
+                        <td><span class="parameters">k, batch_size</span></td>
+                        <td>Huge datasets, streaming</td>
+                    </tr>
+                    <tr>
+                        <td class="algorithm-name">K-Medoids</td>
+                        <td><span class="type-centroid">Centroid</span></td>
+                        <td class="shape-spherical">Spherical</td>
+                        <td class="outliers-robust">Robust</td>
+                        <td class="scalability-poor">Poor</td>
+                        <td><span class="parameters">k</span></td>
+                        <td>Outliers, non-Euclidean metrics</td>
+                    </tr>
+                    <tr>
+                        <td class="algorithm-name">Agglomerative</td>
+                        <td><span class="type-hierarchical">Hierarchical</span></td>
+                        <td class="shape-flexible">Flexible</td>
+                        <td class="outliers-depends">Depends</td>
+                        <td class="scalability-poor">Poor</td>
+                        <td><span class="parameters">linkage, distance</span></td>
+                        <td>Hierarchical structure, small data</td>
+                    </tr>
+                    <tr>
+                        <td class="algorithm-name">Ward</td>
+                        <td><span class="type-hierarchical">Hierarchical</span></td>
+                        <td class="shape-spherical">Spherical</td>
+                        <td class="outliers-moderate">Moderate</td>
+                        <td class="scalability-poor">Poor</td>
+                        <td><span class="parameters">distance</span></td>
+                        <td>Default hierarchical choice</td>
+                    </tr>
+                    <tr>
+                        <td class="algorithm-name">BIRCH</td>
+                        <td><span class="type-hierarchical">Hierarchical</span></td>
+                        <td class="shape-spherical">Spherical</td>
+                        <td class="outliers-moderate">Moderate</td>
+                        <td class="scalability-excellent">Excellent</td>
+                        <td><span class="parameters">threshold, branching</span></td>
+                        <td>Very large datasets</td>
+                    </tr>
+                    <tr>
+                        <td class="algorithm-name">DBSCAN</td>
+                        <td><span class="type-density">Density</span></td>
+                        <td class="shape-arbitrary">Arbitrary</td>
+                        <td class="outliers-robust">Robust</td>
+                        <td class="scalability-good">Good</td>
+                        <td><span class="parameters">ε, minPts</span></td>
+                        <td>Non-convex clusters, outliers</td>
+                    </tr>
+                    <tr>
+                        <td class="algorithm-name">Mean Shift</td>
+                        <td><span class="type-density">Density</span></td>
+                        <td class="shape-arbitrary">Arbitrary</td>
+                        <td class="outliers-robust">Robust</td>
+                        <td class="scalability-poor">Poor</td>
+                        <td><span class="parameters">bandwidth</span></td>
+                        <td>Unknown k, computer vision</td>
+                    </tr>
+                    <tr>
+                        <td class="algorithm-name">Spectral</td>
+                        <td><span class="type-graph">Graph</span></td>
+                        <td class="shape-arbitrary">Arbitrary</td>
+                        <td class="outliers-sensitive">Sensitive</td>
+                        <td class="scalability-poor">Poor</td>
+                        <td><span class="parameters">k, σ</span></td>
+                        <td>Non-convex, manifold data</td>
+                    </tr>
+                    <tr>
+                        <td class="algorithm-name">Affinity Prop</td>
+                        <td><span class="type-graph">Graph</span></td>
+                        <td class="shape-arbitrary">Arbitrary</td>
+                        <td class="outliers-robust">Robust</td>
+                        <td class="scalability-poor">Poor</td>
+                        <td><span class="parameters">preference</span></td>
+                        <td>Unknown k, exemplars needed</td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+    </div>
+</body>
+</html>

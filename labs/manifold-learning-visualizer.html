@@ -1,0 +1,733 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Manifold Learning Visualizer</title>
+    <script src="../assets/vendor/three-r128.min.js"></script>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #0f0c29, #302b63, #24243e);
+            color: white;
+            overflow-x: hidden;
+        }
+
+        .container {
+            max-width: 1600px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+
+        header {
+            text-align: center;
+            padding: 40px 20px;
+            background: rgba(255, 255, 255, 0.05);
+            backdrop-filter: blur(10px);
+            border-radius: 20px;
+            margin-bottom: 30px;
+            animation: fadeInDown 0.8s ease-out;
+        }
+
+        h1 {
+            font-size: 3em;
+            background: linear-gradient(45deg, #667eea, #764ba2, #f093fb);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+            margin-bottom: 10px;
+            animation: gradient 3s ease infinite;
+            background-size: 200% 200%;
+        }
+
+        @keyframes gradient {
+            0% { background-position: 0% 50%; }
+            50% { background-position: 100% 50%; }
+            100% { background-position: 0% 50%; }
+        }
+
+        .subtitle {
+            color: #a0a0a0;
+            font-size: 1.2em;
+        }
+
+        .controls {
+            background: rgba(255, 255, 255, 0.08);
+            backdrop-filter: blur(15px);
+            border-radius: 15px;
+            padding: 25px;
+            margin-bottom: 30px;
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            animation: fadeIn 1s ease-out;
+        }
+
+        .control-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+            gap: 20px;
+        }
+
+        .control-group {
+            display: flex;
+            flex-direction: column;
+        }
+
+        label {
+            font-weight: 600;
+            margin-bottom: 8px;
+            font-size: 0.9em;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            color: #b0b0ff;
+        }
+
+        select, input[type="range"] {
+            padding: 10px;
+            border-radius: 8px;
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            background: rgba(255, 255, 255, 0.1);
+            color: white;
+            font-size: 1em;
+            cursor: pointer;
+            transition: all 0.3s;
+            position: relative;
+            z-index: 100;
+        }
+
+        select:hover, select:focus {
+            background: rgba(255, 255, 255, 0.15);
+            border-color: #667eea;
+            z-index: 200;
+        }
+        
+        select option {
+            background: #1a1a2e;
+            color: white;
+            padding: 10px;
+        }
+
+        input[type="range"] {
+            accent-color: #667eea;
+        }
+
+        .value-display {
+            font-size: 0.9em;
+            color: #ffd700;
+            margin-top: 5px;
+        }
+
+        .visualization-container {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(600px, 1fr));
+            gap: 30px;
+            margin-bottom: 30px;
+        }
+
+        .viz-box {
+            background: rgba(255, 255, 255, 0.05);
+            backdrop-filter: blur(10px);
+            border-radius: 15px;
+            padding: 20px;
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            animation: fadeInUp 1s ease-out;
+        }
+
+        .viz-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 15px;
+        }
+
+        .viz-title {
+            font-size: 1.5em;
+            font-weight: 600;
+        }
+
+        .badge {
+            background: linear-gradient(45deg, #667eea, #764ba2);
+            padding: 5px 15px;
+            border-radius: 20px;
+            font-size: 0.8em;
+            font-weight: 600;
+            text-transform: uppercase;
+        }
+
+        canvas {
+            width: 100%;
+            border-radius: 10px;
+            background: #0a0a1a;
+            cursor: grab;
+            box-shadow: 0 10px 40px rgba(0, 0, 0, 0.5);
+        }
+
+        canvas:active {
+            cursor: grabbing;
+        }
+
+        .info-box {
+            background: rgba(102, 126, 234, 0.2);
+            border: 1px solid rgba(102, 126, 234, 0.5);
+            border-radius: 10px;
+            padding: 15px;
+            margin-top: 20px;
+            animation: fadeIn 1.2s ease-out;
+        }
+
+        .info-box strong {
+            color: #ffd700;
+        }
+
+        button {
+            background: linear-gradient(45deg, #667eea, #764ba2);
+            border: none;
+            padding: 10px 20px;
+            border-radius: 8px;
+            color: white;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s;
+        }
+
+        button:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 5px 20px rgba(102, 126, 234, 0.5);
+        }
+
+        @keyframes fadeIn {
+            from { opacity: 0; }
+            to { opacity: 1; }
+        }
+
+        @keyframes fadeInDown {
+            from {
+                opacity: 0;
+                transform: translateY(-30px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        @keyframes fadeInUp {
+            from {
+                opacity: 0;
+                transform: translateY(30px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        .algorithm-info {
+            margin-top: 20px;
+            padding: 15px;
+            background: rgba(255, 255, 255, 0.05);
+            border-radius: 10px;
+            font-size: 0.9em;
+            line-height: 1.6;
+        }
+
+        @media (max-width: 768px) {
+            .visualization-container {
+                grid-template-columns: 1fr;
+            }
+            
+            h1 {
+                font-size: 2em;
+            }
+        }
+    </style>
+<link rel="stylesheet" href="../assets/lab-theme.css">
+<script defer src="../assets/lab-bridge.js"></script>
+</head>
+<body>
+<aside class="sg-context-note">Concept demonstration: the original demo uses handcrafted geometric projections. The Isomap, MDS, spectral, and t-SNE labels are illustrative; these are not numerical implementations of those algorithms.</aside>
+    <div class="container">
+        <header>
+            <h1>🌀 Manifold Learning Visualizer</h1>
+            <p class="subtitle">Explore dimensionality reduction algorithms with interactive 3D visualizations</p>
+        </header>
+
+        <div class="controls">
+            <div class="control-grid">
+                <div class="control-group">
+                    <label>Algorithm</label>
+                    <select id="algorithm">
+                        <option value="isomap">Isomap Embedding</option>
+                        <option value="mds">Multidimensional Scaling</option>
+                        <option value="spectral">Spectral Embedding</option>
+                        <option value="tsne">t-SNE</option>
+                    </select>
+                </div>
+
+                <div class="control-group">
+                    <label>Dataset</label>
+                    <select id="dataset">
+                        <option value="s-curve">S-Curve</option>
+                        <option value="swiss-roll">Swiss Roll</option>
+                        <option value="sphere">Sphere</option>
+                        <option value="severed-sphere">Severed Sphere</option>
+                    </select>
+                </div>
+
+                <div class="control-group">
+                    <label>Number of Samples</label>
+                    <input type="range" id="samples" min="500" max="3000" value="1500" step="100">
+                    <div class="value-display" id="samplesValue">1500</div>
+                </div>
+
+                <div class="control-group">
+                    <label>Noise Level</label>
+                    <input type="range" id="noise" min="0" max="0.5" value="0" step="0.05">
+                    <div class="value-display" id="noiseValue">0.00</div>
+                </div>
+            </div>
+
+            <div style="margin-top: 20px; display: flex; gap: 10px;">
+                <button onclick="resetView()">🔄 Reset View</button>
+                <button onclick="toggleAutoRotate()">⏸️ Toggle Rotation</button>
+                <button onclick="regenerate()">🎲 Regenerate</button>
+            </div>
+        </div>
+
+        <div class="visualization-container">
+            <div class="viz-box">
+                <div class="viz-header">
+                    <div class="viz-title">Original 3D Data</div>
+                    <div class="badge">Interactive 3D</div>
+                </div>
+                <div id="canvas3d"></div>
+                <div style="color: #888; font-size: 0.85em; margin-top: 10px; text-align: center;">
+                    🖱️ Drag to rotate • Scroll to zoom
+                </div>
+            </div>
+
+            <div class="viz-box">
+                <div class="viz-header">
+                    <div class="viz-title">2D Embedding</div>
+                    <div class="badge" id="algorithmBadge">Isomap</div>
+                </div>
+                <canvas id="canvas2d" width="800" height="600"></canvas>
+            </div>
+        </div>
+
+        <div class="info-box">
+            <strong>💡 How it works:</strong> Manifold learning algorithms reduce high-dimensional data to lower dimensions while preserving important geometric properties. The left panel shows the original 3D manifold structure, while the right panel displays the 2D embedding. Colors help track how points are mapped between dimensions.
+        </div>
+
+        <div class="algorithm-info" id="algorithmInfo">
+            <strong>Isomap:</strong> Preserves geodesic distances along the manifold, unfolding the structure while maintaining local neighborhood relationships.
+        </div>
+    </div>
+
+    <script>
+        // Global variables
+        let scene, camera, renderer, sphereGroup, autoRotate = true;
+        let data3D = [], data2D = [];
+        
+        const algorithmDescriptions = {
+            isomap: "Preserves geodesic distances along the manifold, unfolding the structure while maintaining local neighborhood relationships.",
+            mds: "Attempts to preserve pairwise distances between all points, finding a lower-dimensional representation that minimizes stress.",
+            spectral: "Uses eigenvectors of a graph Laplacian to embed the data, revealing the underlying manifold structure.",
+            tsne: "Emphasizes preserving local neighborhood structure while allowing distant points to separate, good for visualization."
+        };
+
+        // Initialize Three.js scene
+        function init3D() {
+            const container = document.getElementById('canvas3d');
+            const width = container.clientWidth;
+            const height = 600;
+
+            scene = new THREE.Scene();
+            scene.background = new THREE.Color(0x0a0a1a);
+
+            camera = new THREE.PerspectiveCamera(75, width / height, 0.1, 1000);
+            camera.position.z = 5;
+
+            renderer = new THREE.WebGLRenderer({ antialias: true });
+            renderer.setSize(width, height);
+            container.appendChild(renderer.domElement);
+
+            // Add lights
+            const ambientLight = new THREE.AmbientLight(0xffffff, 0.8);
+            scene.add(ambientLight);
+
+            const pointLight = new THREE.PointLight(0xffffff, 0.5);
+            pointLight.position.set(10, 10, 10);
+            scene.add(pointLight);
+
+            // Add axes helper
+            const axesHelper = new THREE.AxesHelper(3);
+            scene.add(axesHelper);
+
+            // Add grid
+            const gridHelper = new THREE.GridHelper(10, 10, 0x444444, 0x222222);
+            scene.add(gridHelper);
+
+            // Mouse controls
+            let isDragging = false;
+            let previousMousePosition = { x: 0, y: 0 };
+
+            renderer.domElement.addEventListener('mousedown', (e) => {
+                isDragging = true;
+                previousMousePosition = { x: e.clientX, y: e.clientY };
+            });
+
+            renderer.domElement.addEventListener('mousemove', (e) => {
+                if (isDragging && sphereGroup) {
+                    const deltaX = e.clientX - previousMousePosition.x;
+                    const deltaY = e.clientY - previousMousePosition.y;
+
+                    sphereGroup.rotation.y += deltaX * 0.01;
+                    sphereGroup.rotation.x += deltaY * 0.01;
+
+                    previousMousePosition = { x: e.clientX, y: e.clientY };
+                }
+            });
+
+            renderer.domElement.addEventListener('mouseup', () => {
+                isDragging = false;
+            });
+
+            renderer.domElement.addEventListener('wheel', (e) => {
+                e.preventDefault();
+                camera.position.z += e.deltaY * 0.01;
+                camera.position.z = Math.max(2, Math.min(10, camera.position.z));
+            });
+        }
+
+        // Generate datasets
+        function generateDataset(type, n, noiseLevel) {
+            const points = [];
+            
+            switch(type) {
+                case 's-curve':
+                    for (let i = 0; i < n; i++) {
+                        const t = (i / n) * 3 * Math.PI;
+                        const x = Math.sin(t);
+                        const y = Math.sign(t - Math.PI * 1.5) * (Math.cos(t) - 1);
+                        const z = (i / n) * 2 - 1;
+                        points.push({
+                            x: x + (Math.random() - 0.5) * noiseLevel,
+                            y: y + (Math.random() - 0.5) * noiseLevel,
+                            z: z + (Math.random() - 0.5) * noiseLevel,
+                            color: i / n
+                        });
+                    }
+                    break;
+                    
+                case 'swiss-roll':
+                    for (let i = 0; i < n; i++) {
+                        const t = 1.5 * Math.PI * (1 + 2 * i / n);
+                        const x = t * Math.cos(t) / 8;
+                        const y = (i / n) * 2 - 1;
+                        const z = t * Math.sin(t) / 8;
+                        points.push({
+                            x: x + (Math.random() - 0.5) * noiseLevel,
+                            y: y + (Math.random() - 0.5) * noiseLevel,
+                            z: z + (Math.random() - 0.5) * noiseLevel,
+                            color: i / n
+                        });
+                    }
+                    break;
+                    
+                case 'sphere':
+                    for (let i = 0; i < n; i++) {
+                        const theta = Math.random() * 2 * Math.PI;
+                        const phi = Math.acos(2 * Math.random() - 1);
+                        const r = 1.5;
+                        points.push({
+                            x: r * Math.sin(phi) * Math.cos(theta) + (Math.random() - 0.5) * noiseLevel,
+                            y: r * Math.sin(phi) * Math.sin(theta) + (Math.random() - 0.5) * noiseLevel,
+                            z: r * Math.cos(phi) + (Math.random() - 0.5) * noiseLevel,
+                            color: phi / Math.PI
+                        });
+                    }
+                    break;
+                    
+                case 'severed-sphere':
+                    for (let i = 0; i < n; i++) {
+                        const theta = Math.random() * 2 * Math.PI;
+                        const phi = Math.acos(2 * Math.random() - 1);
+                        if (phi < Math.PI * 0.25 || phi > Math.PI * 0.75) {
+                            i--;
+                            continue;
+                        }
+                        const r = 1.5;
+                        points.push({
+                            x: r * Math.sin(phi) * Math.cos(theta) + (Math.random() - 0.5) * noiseLevel,
+                            y: r * Math.sin(phi) * Math.sin(theta) + (Math.random() - 0.5) * noiseLevel,
+                            z: r * Math.cos(phi) + (Math.random() - 0.5) * noiseLevel,
+                            color: theta / (2 * Math.PI)
+                        });
+                    }
+                    break;
+            }
+            
+            return points;
+        }
+
+        // Apply manifold learning
+        function applyManifoldLearning(points, algo) {
+            const embedded = [];
+            
+            switch(algo) {
+                case 'isomap':
+                    points.forEach((p) => {
+                        const angle = Math.atan2(p.z, p.x);
+                        const dist = Math.sqrt(p.x * p.x + p.z * p.z);
+                        embedded.push({
+                            x: angle * 2 + dist * 0.3,
+                            y: p.y * 1.5,
+                            color: p.color
+                        });
+                    });
+                    break;
+                    
+                case 'mds':
+                    points.forEach((p) => {
+                        embedded.push({
+                            x: p.x * 1.5 + p.z * 0.8,
+                            y: p.y * 1.5 + p.x * 0.3,
+                            color: p.color
+                        });
+                    });
+                    break;
+                    
+                case 'spectral':
+                    points.forEach((p) => {
+                        const r = Math.sqrt(p.x * p.x + p.z * p.z);
+                        const theta = Math.atan2(p.z, p.x);
+                        embedded.push({
+                            x: Math.cos(theta * 1.5) * (r * 2 + 1),
+                            y: Math.sin(theta * 1.5) * (r * 2 + 1) + p.y * 0.5,
+                            color: p.color
+                        });
+                    });
+                    break;
+                    
+                case 'tsne':
+                    points.forEach((p) => {
+                        const angle = Math.atan2(p.z, p.x) + p.y * 0.5;
+                        const r = Math.sqrt(p.x * p.x + p.z * p.z) * 1.5;
+                        embedded.push({
+                            x: Math.cos(angle) * (r + 1),
+                            y: Math.sin(angle) * (r + 1),
+                            color: p.color
+                        });
+                    });
+                    break;
+            }
+            
+            return embedded;
+        }
+
+        // Color mapping - returns RGB array
+        function getColorRGB(value) {
+            const colors = [
+                [255, 0, 0],     // Red
+                [255, 127, 0],   // Orange
+                [255, 255, 0],   // Yellow
+                [0, 255, 0],     // Green
+                [0, 255, 255],   // Cyan
+                [0, 0, 255],     // Blue
+                [255, 0, 255]    // Magenta
+            ];
+            
+            const idx = value * (colors.length - 1);
+            const i1 = Math.floor(idx);
+            const i2 = Math.min(i1 + 1, colors.length - 1);
+            const t = idx - i1;
+            
+            const r = colors[i1][0] * (1 - t) + colors[i2][0] * t;
+            const g = colors[i1][1] * (1 - t) + colors[i2][1] * t;
+            const b = colors[i1][2] * (1 - t) + colors[i2][2] * t;
+            
+            return [r / 255, g / 255, b / 255];
+        }
+
+        // Update 3D visualization
+        function update3D(points) {
+            if (sphereGroup) {
+                scene.remove(sphereGroup);
+            }
+
+            sphereGroup = new THREE.Group();
+            
+            const sphereGeometry = new THREE.SphereGeometry(0.025, 8, 8);
+            
+            points.forEach(p => {
+                const rgb = getColorRGB(p.color);
+                const material = new THREE.MeshPhongMaterial({
+                    color: new THREE.Color(rgb[0], rgb[1], rgb[2]),
+                    emissive: new THREE.Color(rgb[0] * 0.3, rgb[1] * 0.3, rgb[2] * 0.3)
+                });
+                
+                const sphere = new THREE.Mesh(sphereGeometry, material);
+                sphere.position.set(p.x, p.y, p.z);
+                sphereGroup.add(sphere);
+            });
+
+            scene.add(sphereGroup);
+        }
+
+        // Draw 2D visualization
+        function draw2D(points) {
+            const canvas = document.getElementById('canvas2d');
+            const ctx = canvas.getContext('2d');
+            const width = canvas.width;
+            const height = canvas.height;
+
+            ctx.fillStyle = '#0a0a1a';
+            ctx.fillRect(0, 0, width, height);
+
+            // Find bounds
+            let minX = Infinity, maxX = -Infinity;
+            let minY = Infinity, maxY = -Infinity;
+            points.forEach(p => {
+                minX = Math.min(minX, p.x);
+                maxX = Math.max(maxX, p.x);
+                minY = Math.min(minY, p.y);
+                maxY = Math.max(maxY, p.y);
+            });
+
+            const padding = 80;
+            const scaleX = (width - 2 * padding) / (maxX - minX);
+            const scaleY = (height - 2 * padding) / (maxY - minY);
+            const scale = Math.min(scaleX, scaleY) * 0.8;
+
+            // Draw grid
+            ctx.strokeStyle = 'rgba(255, 255, 255, 0.1)';
+            ctx.lineWidth = 1;
+            for (let i = 0; i <= 10; i++) {
+                const x = padding + (width - 2 * padding) * i / 10;
+                const y = padding + (height - 2 * padding) * i / 10;
+                ctx.beginPath();
+                ctx.moveTo(x, padding);
+                ctx.lineTo(x, height - padding);
+                ctx.stroke();
+                ctx.beginPath();
+                ctx.moveTo(padding, y);
+                ctx.lineTo(width - padding, y);
+                ctx.stroke();
+            }
+
+            // Draw axes
+            ctx.strokeStyle = 'rgba(255, 255, 255, 0.3)';
+            ctx.lineWidth = 2;
+            const centerX = width / 2;
+            const centerY = height / 2;
+            ctx.beginPath();
+            ctx.moveTo(padding, centerY);
+            ctx.lineTo(width - padding, centerY);
+            ctx.moveTo(centerX, padding);
+            ctx.lineTo(centerX, height - padding);
+            ctx.stroke();
+
+            // Draw points with glow effect
+            points.forEach(p => {
+                const sx = width / 2 + (p.x - (minX + maxX) / 2) * scale;
+                const sy = height / 2 - (p.y - (minY + maxY) / 2) * scale;
+                
+                const rgb = getColorRGB(p.color);
+                const rgbColor = `rgb(${rgb[0] * 255},${rgb[1] * 255},${rgb[2] * 255})`;
+                
+                // Glow
+                ctx.shadowBlur = 10;
+                ctx.shadowColor = rgbColor;
+                
+                ctx.fillStyle = rgbColor;
+                ctx.beginPath();
+                ctx.arc(sx, sy, 4, 0, Math.PI * 2);
+                ctx.fill();
+            });
+            
+            ctx.shadowBlur = 0;
+        }
+
+        // Animation loop
+        function animate() {
+            requestAnimationFrame(animate);
+
+            if (sphereGroup && autoRotate) {
+                sphereGroup.rotation.y += 0.003;
+                sphereGroup.rotation.x += 0.001;
+            }
+
+            renderer.render(scene, camera);
+        }
+
+        // Control functions
+        function resetView() {
+            if (sphereGroup) {
+                sphereGroup.rotation.set(0, 0, 0);
+            }
+            camera.position.set(0, 0, 5);
+        }
+
+        function toggleAutoRotate() {
+            autoRotate = !autoRotate;
+        }
+
+        function regenerate() {
+            updateVisualization();
+        }
+
+        function updateVisualization() {
+            const algorithm = document.getElementById('algorithm').value;
+            const dataset = document.getElementById('dataset').value;
+            const samples = parseInt(document.getElementById('samples').value);
+            const noise = parseFloat(document.getElementById('noise').value);
+
+            document.getElementById('algorithmBadge').textContent = algorithm.toUpperCase();
+            document.getElementById('algorithmInfo').innerHTML = 
+                `<strong>${algorithm.charAt(0).toUpperCase() + algorithm.slice(1)}:</strong> ${algorithmDescriptions[algorithm]}`;
+
+            data3D = generateDataset(dataset, samples, noise);
+            data2D = applyManifoldLearning(data3D, algorithm);
+
+            update3D(data3D);
+            draw2D(data2D);
+        }
+
+        // Event listeners
+        document.getElementById('algorithm').addEventListener('change', updateVisualization);
+        document.getElementById('dataset').addEventListener('change', updateVisualization);
+        document.getElementById('samples').addEventListener('input', (e) => {
+            document.getElementById('samplesValue').textContent = e.target.value;
+            updateVisualization();
+        });
+        document.getElementById('noise').addEventListener('input', (e) => {
+            document.getElementById('noiseValue').textContent = parseFloat(e.target.value).toFixed(2);
+            updateVisualization();
+        });
+
+        // Initialize
+        window.addEventListener('load', () => {
+            init3D();
+            updateVisualization();
+            animate();
+        });
+
+        // Handle window resize
+        window.addEventListener('resize', () => {
+            const container = document.getElementById('canvas3d');
+            const width = container.clientWidth;
+            const height = 600;
+
+            camera.aspect = width / height;
+            camera.updateProjectionMatrix();
+            renderer.setSize(width, height);
+        });
+    </script>
+</body>
+</html>
