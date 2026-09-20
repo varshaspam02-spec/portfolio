@@ -1,0 +1,215 @@
+/* ==========================================================================
+   Lab kit: the shared interface for every playground in labs/.
+   Pair with lab-bridge.js (window.SGLab). Labs keep only plot-specific rules
+   in their own <style>; everything else comes from here.
+   1 Tokens  2 Base  3 Shell  4 Panels  5 Controls  6 Data display  7 Responsive
+   ========================================================================== */
+
+@font-face{font-family:Geist;src:url('fonts/geist.woff2') format('woff2');font-weight:100 900;font-display:swap}
+@font-face{font-family:'Geist Mono';src:url('fonts/geist-mono.woff2') format('woff2');font-weight:100 900;font-display:swap}
+
+/* 1 Tokens ---------------------------------------------------------------- */
+:root{
+  color-scheme:dark;
+  --bg:#05060b;
+  --plot:#0b0d16;              /* opaque chart surface: every data colour is validated against it */
+  --ink:#f4f3ef;
+  --muted:#a3a6b8;
+  --faint:#6f7286;
+  --line:rgba(255,255,255,.09);
+  --line-strong:rgba(255,255,255,.18);
+  --grid:#1a1d2b;              /* solid hairlines, one shade off the plot surface */
+  --axis:#2d3147;
+  /* Interface accents follow the site theme. */
+  --a1:#8f6bff;--a2:#4aa3ff;--a3:#3df5cf;--warm:#ffc47a;
+  --grad:linear-gradient(100deg,var(--a1),var(--a2) 55%,var(--a3));
+  /* Data colours never follow the theme. Categorical slots are assigned in this fixed order. */
+  --s1:#3987e5;--s2:#d95926;--s3:#199e70;--s4:#c98500;--s5:#d55181;--s6:#008300;--s7:#9085e9;--s8:#e66767;
+  --unassigned:#7b7f93;
+  /* Status is reserved for state and always ships with an icon and a label. */
+  --good:#0ca30c;--warning:#fab219;--serious:#ec835a;--critical:#d03b3b;
+  --radius:18px;
+  --radius-sm:12px;
+  --ease:cubic-bezier(.22,1,.36,1);
+  --sans:Geist,system-ui,-apple-system,'Segoe UI',sans-serif;
+  --mono:'Geist Mono',ui-monospace,'Cascadia Code',Consolas,monospace;
+}
+html[data-theme=ember]{--a1:#ff6a3d;--a2:#ff3f8e;--a3:#ffc24d;--warm:#a995ff}
+html[data-theme=acid]{--a1:#c9ff4a;--a2:#4affc3;--a3:#4ab3ff;--warm:#ff8ad1}
+
+/* 2 Base ------------------------------------------------------------------ */
+*,*::before,*::after{box-sizing:border-box}
+html{-webkit-text-size-adjust:100%;scrollbar-color:#2a2d3d transparent}
+body{margin:0;padding:clamp(12px,2vw,20px);background:var(--bg);color:var(--ink);font:400 15px/1.55 var(--sans);-webkit-font-smoothing:antialiased;overflow-x:hidden}
+/* Inside the portfolio the glass shell shows through; standalone pages get their own backdrop. */
+.is-embedded body{background:transparent}
+html:not(.is-embedded) body{min-height:100vh;padding:clamp(16px,3vw,40px);background:radial-gradient(90vmax 70vmax at 85% -10%,color-mix(in srgb,var(--a1) 22%,transparent),transparent 60%),radial-gradient(80vmax 60vmax at -10% 40%,color-mix(in srgb,var(--a2) 16%,transparent),transparent 60%),var(--bg);background-attachment:fixed}
+h1,h2,h3,p{margin:0}
+button,input,select,textarea{font:inherit;color:inherit}
+button{cursor:pointer}
+a{color:inherit}
+canvas,svg{display:block;max-width:100%}
+[hidden]{display:none!important}
+::selection{background:var(--a3);color:#05060b}
+:focus-visible{outline:2px solid var(--a3);outline-offset:3px}
+.mono{font-family:var(--mono)}
+
+/* 3 Shell ----------------------------------------------------------------- */
+.lab{max-width:1400px;margin-inline:auto}
+.lab-head{display:flex;align-items:flex-end;justify-content:space-between;flex-wrap:wrap;gap:12px 24px;margin-bottom:22px}
+.is-embedded .lab-head{display:none}
+.lab-head h1{font-size:clamp(28px,4vw,44px);font-weight:600;line-height:1.05;letter-spacing:-.045em}
+.lab-back{display:inline-flex;align-items:center;gap:8px;font:500 12.5px/1 var(--mono);letter-spacing:.1em;text-transform:uppercase;text-decoration:none;color:var(--muted);transition:color .3s}
+.lab-back:hover{color:var(--ink)}
+.lab-note{display:flex;gap:12px;margin-bottom:16px;padding:14px 18px;border-radius:var(--radius-sm);font-size:14px;line-height:1.6;color:color-mix(in srgb,var(--warm) 40%,var(--ink));background:color-mix(in srgb,var(--warm) 7%,transparent);box-shadow:inset 0 0 0 1px color-mix(in srgb,var(--warm) 26%,transparent)}
+.lab-note::before{content:'i';flex:none;display:grid;place-items:center;width:20px;height:20px;margin-top:1px;border-radius:50%;font:600 12px/1 var(--mono);color:#05060b;background:var(--warm)}
+.lab-app{display:grid;grid-template-columns:minmax(260px,320px) minmax(0,1fr);gap:16px;align-items:start}
+.lab-app.side-wide{grid-template-columns:minmax(300px,380px) minmax(0,1fr)}
+.lab-side,.lab-stage{display:grid;gap:16px;min-width:0}
+.stage-grid{display:grid;gap:16px;grid-template-columns:repeat(auto-fit,minmax(min(100%,340px),1fr))}
+
+/* 4 Panels ---------------------------------------------------------------- */
+.group,.panel{position:relative;min-width:0;border-radius:var(--radius);background:linear-gradient(180deg,rgba(255,255,255,.055),rgba(255,255,255,.022));box-shadow:inset 0 0 0 1px var(--line),inset 0 1px 0 rgba(255,255,255,.05)}
+.group{display:grid;gap:16px;padding:20px}
+.group-title,.panel-head h2{font:500 12px/1.3 var(--mono);letter-spacing:.12em;text-transform:uppercase;color:var(--muted)}
+.panel{display:flex;flex-direction:column;overflow:hidden}
+.panel-head{display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px 16px;min-height:56px;padding:10px 12px 10px 20px;border-bottom:1px solid var(--line)}
+.panel-body{padding:16px}
+.toolbar{display:flex;flex-wrap:wrap;gap:8px}
+/* The plot wrapper owns the chart surface; canvases draw on var(--plot). */
+.plot{position:relative;margin:12px;border-radius:var(--radius-sm);background:var(--plot);box-shadow:inset 0 0 0 1px var(--line);overflow:hidden}
+.plot>canvas,.plot>svg{width:100%;height:auto}
+.plot-empty{position:absolute;inset:0;display:grid;place-items:center;padding:24px;text-align:center;color:var(--faint);pointer-events:none}
+
+.statusbar{display:flex;align-items:center;gap:12px;min-height:48px;padding:10px 20px;border-top:1px solid var(--line);font-size:14px;color:var(--muted)}
+.statusbar::before{content:'';flex:none;width:9px;height:9px;border-radius:50%;background:var(--faint)}
+.statusbar[data-state=running]{color:var(--ink)}
+.statusbar[data-state=running]::before{background:var(--a3);animation:lab-pulse 1.2s ease-in-out infinite}
+.statusbar[data-state=done]{color:var(--ink)}
+.statusbar[data-state=done]::before{content:'✓';display:grid;place-items:center;width:18px;height:18px;font:700 11px/1 var(--sans);color:#05060b;background:var(--good)}
+.statusbar[data-state=warn]::before{content:'!';display:grid;place-items:center;width:18px;height:18px;font:700 12px/1 var(--sans);color:#05060b;background:var(--warning)}
+.statusbar[data-state=error]{color:var(--ink)}
+.statusbar[data-state=error]::before{content:'×';display:grid;place-items:center;width:18px;height:18px;font:700 14px/1 var(--sans);color:#fff;background:var(--critical)}
+@keyframes lab-pulse{50%{opacity:.35;transform:scale(.8)}}
+
+/* 5 Controls -------------------------------------------------------------- */
+.btn{display:inline-flex;align-items:center;justify-content:center;gap:8px;min-height:40px;padding:0 18px;border:0;border-radius:999px;font-size:14px;font-weight:500;letter-spacing:-.01em;white-space:nowrap;color:var(--ink);background:rgba(255,255,255,.06);box-shadow:inset 0 0 0 1px var(--line-strong);transition:background .25s,box-shadow .3s,transform .3s var(--ease),opacity .25s}
+.btn:hover{background:rgba(255,255,255,.12)}
+.btn:active{transform:scale(.97)}
+.btn:disabled{opacity:.4;cursor:not-allowed;transform:none}
+.btn svg{width:15px;height:15px;flex:none}
+.btn-primary{color:#05060b;background:var(--ink);box-shadow:none}
+.btn-primary:hover{background:#fff;box-shadow:0 0 0 4px rgba(255,255,255,.1),0 10px 30px -8px var(--a2)}
+.btn-ghost{background:transparent;box-shadow:none;color:var(--muted)}
+.btn-ghost:hover{color:var(--ink);background:rgba(255,255,255,.07)}
+.btn-danger{color:#ffb4b4;box-shadow:inset 0 0 0 1px color-mix(in srgb,var(--critical) 55%,transparent)}
+.btn-danger:hover{background:color-mix(in srgb,var(--critical) 22%,transparent)}
+.btn-block{width:100%}
+.btn-row{display:flex;flex-wrap:wrap;gap:8px}
+.btn-row>.btn{flex:1 1 auto}
+
+.field{display:grid;grid-template-columns:1fr auto;align-items:center;gap:8px 12px}
+.field>label,.label{font-size:13.5px;font-weight:500;color:var(--ink)}
+.field>output,.value{min-width:44px;padding:4px 10px;border-radius:999px;font:500 12.5px/1.3 var(--mono);text-align:center;color:var(--ink);background:rgba(255,255,255,.07);box-shadow:inset 0 0 0 1px var(--line)}
+.field>input,.field>select,.field>textarea,.field>.hint,.field>.seg{grid-column:1/-1}
+.field-pair{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}
+.hint{font-size:12.5px;line-height:1.5;color:var(--faint)}
+
+input[type=range]{--p:50%;-webkit-appearance:none;appearance:none;width:100%;height:22px;margin:0;background:none;cursor:pointer}
+input[type=range]::-webkit-slider-runnable-track{height:4px;border-radius:999px;background:linear-gradient(90deg,var(--a2) var(--p),rgba(255,255,255,.13) var(--p))}
+input[type=range]::-moz-range-track{height:4px;border-radius:999px;background:rgba(255,255,255,.13)}
+input[type=range]::-moz-range-progress{height:4px;border-radius:999px;background:var(--a2)}
+input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:18px;height:18px;margin-top:-7px;border:0;border-radius:50%;background:var(--ink);box-shadow:0 0 0 4px color-mix(in srgb,var(--a2) 28%,transparent),0 2px 8px rgba(0,0,0,.5);transition:box-shadow .25s}
+input[type=range]::-moz-range-thumb{width:18px;height:18px;border:0;border-radius:50%;background:var(--ink);box-shadow:0 0 0 4px color-mix(in srgb,var(--a2) 28%,transparent)}
+input[type=range]:hover::-webkit-slider-thumb{box-shadow:0 0 0 7px color-mix(in srgb,var(--a2) 30%,transparent),0 2px 8px rgba(0,0,0,.5)}
+
+select,input[type=number],input[type=text],input[type=search],textarea{width:100%;min-height:40px;padding:8px 14px;border:0;border-radius:var(--radius-sm);font-size:14px;color:var(--ink);background:rgba(255,255,255,.05);box-shadow:inset 0 0 0 1px var(--line);transition:box-shadow .3s}
+select{-webkit-appearance:none;appearance:none;padding-right:36px;background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' fill='none' stroke='%23a3a6b8' stroke-width='1.6' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m1 1.5 5 5 5-5'/%3E%3C/svg%3E");background-repeat:no-repeat;background-position:right 14px center}
+select option{color:var(--ink);background:#12141f}
+textarea{min-height:96px;resize:vertical;font:13px/1.5 var(--mono)}
+select:focus,input:focus,textarea:focus{outline:0;box-shadow:inset 0 0 0 1px var(--a3),0 0 0 4px color-mix(in srgb,var(--a3) 14%,transparent)}
+input[type=range]:focus{box-shadow:none}
+input[type=range]:focus-visible{outline:2px solid var(--a3);outline-offset:4px;border-radius:999px}
+::placeholder{color:var(--faint)}
+input[type=file]{width:100%;font-size:13px;color:var(--muted)}
+input[type=file]::file-selector-button{margin-right:12px;min-height:36px;padding:0 16px;border:0;border-radius:999px;font:500 13.5px var(--sans);color:var(--ink);background:rgba(255,255,255,.08);box-shadow:inset 0 0 0 1px var(--line-strong);cursor:pointer;transition:background .25s}
+input[type=file]::file-selector-button:hover{background:rgba(255,255,255,.15)}
+
+.check{display:inline-flex;align-items:center;gap:10px;font-size:13.5px;cursor:pointer}
+.check input{-webkit-appearance:none;appearance:none;position:relative;flex:none;width:36px;height:20px;margin:0;border-radius:999px;background:rgba(255,255,255,.14);transition:background .3s;cursor:pointer}
+.check input::after{content:'';position:absolute;top:3px;left:3px;width:14px;height:14px;border-radius:50%;background:var(--ink);transition:transform .3s var(--ease)}
+.check input:checked{background:var(--a2)}
+.check input:checked::after{transform:translateX(16px)}
+
+/* Segmented control and tabs share one look. */
+.seg,.tabs{display:flex;flex-wrap:wrap;gap:4px;padding:4px;border-radius:22px;background:rgba(255,255,255,.04);box-shadow:inset 0 0 0 1px var(--line)}
+.tabs{border-radius:var(--radius-sm)}
+.seg>button,.tab{flex:1 1 auto;min-height:32px;padding:0 14px;border:0;border-radius:999px;font-size:13px;font-weight:500;color:var(--muted);background:none;transition:color .25s,background .25s}
+.tab{border-radius:9px}
+.seg>button:hover,.tab:hover{color:var(--ink)}
+.seg>button[aria-pressed=true],.tab[aria-selected=true],.tab.active{color:#05060b;background:var(--ink)}
+
+/* 6 Data display ---------------------------------------------------------- */
+.stat-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}
+.stat{display:grid;gap:4px;padding:12px 14px;border-radius:var(--radius-sm);background:rgba(255,255,255,.035);box-shadow:inset 0 0 0 1px var(--line)}
+.stat-label{font-size:12px;color:var(--muted)}
+.stat-value{font-size:22px;font-weight:550;line-height:1.1;letter-spacing:-.03em;color:var(--ink)}
+.stat-value small{font-size:13px;font-weight:450;letter-spacing:0;color:var(--muted)}
+
+.kv{display:grid;gap:0;margin:0}
+.kv>div{display:flex;justify-content:space-between;gap:16px;padding:9px 0;border-bottom:1px solid var(--line);font-size:13.5px}
+.kv>div:last-child{border-bottom:0}
+.kv dt{color:var(--muted)}
+.kv dd{margin:0;font-family:var(--mono);font-size:13px;color:var(--ink)}
+
+.chip{display:inline-flex;align-items:center;gap:6px;padding:5px 11px;border-radius:999px;font:500 11.5px/1.3 var(--mono);letter-spacing:.06em;text-transform:uppercase;color:var(--muted);background:rgba(255,255,255,.05);box-shadow:inset 0 0 0 1px var(--line)}
+.chip-row{display:flex;flex-wrap:wrap;gap:6px}
+
+/* Legend text stays in ink; only the swatch carries the series colour. */
+.legend{display:flex;flex-wrap:wrap;gap:8px 16px;margin:0;padding:0;list-style:none;font-size:13px;color:var(--muted)}
+.legend li{display:inline-flex;align-items:center;gap:8px}
+.legend canvas,.legend .swatch{flex:none;width:14px;height:14px}
+.legend .swatch{border-radius:4px;background:var(--c,var(--s1))}
+.scale{display:grid;gap:6px;font-size:12px;color:var(--muted)}
+.scale-bar{height:10px;border-radius:999px;box-shadow:inset 0 0 0 1px var(--line)}
+.scale-ends{display:flex;justify-content:space-between}
+
+.explain{font-size:14px;line-height:1.7;color:var(--muted)}
+.explain strong{font-weight:550;color:var(--ink)}
+details.group>summary{display:flex;align-items:center;justify-content:space-between;list-style:none;cursor:pointer}
+details.group>summary::-webkit-details-marker{display:none}
+details.group>summary::after{content:'+';font:300 20px/1 var(--sans);color:var(--muted);transition:transform .4s var(--ease)}
+details.group[open]>summary::after{transform:rotate(45deg)}
+
+.table-wrap{overflow:auto;border-radius:var(--radius-sm);box-shadow:inset 0 0 0 1px var(--line)}
+table{width:100%;border-collapse:collapse;font-size:13.5px}
+th,td{padding:10px 14px;text-align:left;border-bottom:1px solid var(--line);white-space:nowrap}
+th{position:sticky;top:0;font:500 11.5px/1.3 var(--mono);letter-spacing:.08em;text-transform:uppercase;color:var(--muted);background:#10121c}
+td{color:var(--ink);font-variant-numeric:tabular-nums}
+tbody tr:last-child td{border-bottom:0}
+tbody tr:hover td{background:rgba(255,255,255,.03)}
+
+/* One tooltip per document, positioned by SGLab.tooltip(). */
+.lab-tip{position:fixed;top:0;left:0;z-index:50;max-width:260px;padding:9px 12px;border-radius:10px;font-size:12.5px;line-height:1.5;color:var(--ink);background:rgba(18,20,31,.96);box-shadow:inset 0 0 0 1px var(--line-strong),0 12px 32px -8px #000;pointer-events:none;opacity:0;transition:opacity .15s}
+.lab-tip.is-on{opacity:1}
+.lab-tip b{font-weight:550}
+.lab-tip .tip-row{display:flex;align-items:center;gap:8px}
+.lab-tip .tip-row i{flex:none;width:9px;height:9px;border-radius:50%;background:var(--c)}
+.lab-tip .tip-muted{color:var(--muted)}
+
+/* 7 Responsive ------------------------------------------------------------ */
+@media(max-width:860px){
+  .lab-app,.lab-app.side-wide{grid-template-columns:1fr}
+  /* The plot leads on small screens; its toolbar keeps the main actions beside it. */
+  .lab-stage{order:-1}
+}
+@media(max-width:520px){
+  body{padding:8px;font-size:14.5px}
+  .group{padding:16px}
+  .panel-head{padding:10px 12px 10px 16px}
+  .plot{margin:8px}
+  .statusbar{padding:10px 16px}
+  .toolbar{width:100%}
+  .toolbar>.btn{flex:1 1 auto}
+}
+@media(prefers-reduced-motion:reduce){*,*::before,*::after{animation:none!important;transition:none!important}}

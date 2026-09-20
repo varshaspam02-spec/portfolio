@@ -11,15 +11,15 @@ Reviewed 19 September 2026. Source content belongs to Srinjoy Ghosh.
 | [articles](https://sites.google.com/view/srinjoy-ghosh/articles) | `articles/index.html` | Rebuilt with the shared theme |
 | [contact](https://sites.google.com/view/srinjoy-ghosh/contact) | `contact/index.html` | Rebuilt with the shared theme |
 | [spaces](https://sites.google.com/view/srinjoy-ghosh/spaces) | `spaces/index.html` | Rebuilt with the shared theme |
-| [K-Means clustering](https://sites.google.com/view/srinjoy-ghosh/spaces/k-means) | `spaces/k-means/index.html` | Original app moved to `labs/k-means.html` |
-| [PCA dimensionality reduction](https://sites.google.com/view/srinjoy-ghosh/spaces/pca-dimensionality-reduction) | `spaces/pca-dimensionality-reduction/index.html` | Original app moved to `labs/pca-dimensionality-reduction.html` |
-| [Decision tree builder](https://sites.google.com/view/srinjoy-ghosh/spaces/decision-tree-builder) | `spaces/decision-tree-builder/index.html` | Original app moved to `labs/decision-tree-builder.html` |
-| [Neural network playground](https://sites.google.com/view/srinjoy-ghosh/spaces/neural-network-playground) | `spaces/neural-network-playground/index.html` | Original app moved to `labs/neural-network-playground.html` |
-| [Gradient descent visualizer](https://sites.google.com/view/srinjoy-ghosh/spaces/gradient-descent-visualizer) | `spaces/gradient-descent-visualizer/index.html` | Original app moved to `labs/gradient-descent-visualizer.html` |
-| [Manifold learning visualizer](https://sites.google.com/view/srinjoy-ghosh/spaces/manifold-learning-visualizer) | `spaces/manifold-learning-visualizer/index.html` | Original app moved to `labs/manifold-learning-visualizer.html` |
-| [Transformer attention](https://sites.google.com/view/srinjoy-ghosh/spaces/attention-vizualization) | `spaces/attention-vizualization/index.html` | Original app moved to `labs/attention-vizualization.html` |
+| [K-Means clustering](https://sites.google.com/view/srinjoy-ghosh/spaces/k-means) | `spaces/k-means/index.html` | Rebuilt on the lab kit as `labs/k-means.html` |
+| [PCA dimensionality reduction](https://sites.google.com/view/srinjoy-ghosh/spaces/pca-dimensionality-reduction) | `spaces/pca-dimensionality-reduction/index.html` | Rebuilt on the lab kit as `labs/pca-dimensionality-reduction.html` |
+| [Decision tree builder](https://sites.google.com/view/srinjoy-ghosh/spaces/decision-tree-builder) | `spaces/decision-tree-builder/index.html` | Rebuilt on the lab kit as `labs/decision-tree-builder.html` |
+| [Neural network playground](https://sites.google.com/view/srinjoy-ghosh/spaces/neural-network-playground) | `spaces/neural-network-playground/index.html` | Rebuilt on the lab kit as `labs/neural-network-playground.html` |
+| [Gradient descent visualizer](https://sites.google.com/view/srinjoy-ghosh/spaces/gradient-descent-visualizer) | `spaces/gradient-descent-visualizer/index.html` | Rebuilt on the lab kit as `labs/gradient-descent-visualizer.html` |
+| [Manifold learning visualizer](https://sites.google.com/view/srinjoy-ghosh/spaces/manifold-learning-visualizer) | `spaces/manifold-learning-visualizer/index.html` | Rebuilt on the lab kit as `labs/manifold-learning-visualizer.html` |
+| [Transformer attention](https://sites.google.com/view/srinjoy-ghosh/spaces/attention-vizualization) | `spaces/attention-vizualization/index.html` | Rebuilt on the lab kit as `labs/attention-vizualization.html` |
 
-The K-Means comparison table is also retained as `labs/k-means-1.html`.
+The K-Means comparison table is also retained, rebuilt on the lab kit, as `labs/k-means-1.html`.
 
 ## Projects
 

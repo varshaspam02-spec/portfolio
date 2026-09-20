@@ -1,330 +1,806 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="en">
 <head>
-  <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Neural Network Playground – From Scratch</title>
-  <style>
-    :root{
-      --bg:#0b0f14;--panel:#111826;--panel2:#0e1520;--ink:#eaf3ff;--muted:#a8bed6;--acc:#5ab0ff;--ok:#8be9a0;--warn:#ffd166;--bad:#ff6b6b
-    }
-    *{box-sizing:border-box}
-    html,body{height:100%}
-    body{margin:0;background:radial-gradient(1200px 800px at 20% 0%,#0e1622 0%,#0b0f14 60%,#090d12 100%);color:var(--ink);font:14px/1.45 system-ui,-apple-system,Segoe UI,Roboto,Helvetica,Arial}
-    header{display:flex;align-items:center;justify-content:space-between;padding:14px 18px;border-bottom:1px solid #1b283c;background:linear-gradient(180deg,#101a2a,#0c1421)}
-    header h1{font-size:16px;margin:0}
-    .wrap{display:grid;grid-template-columns:360px 1fr;gap:14px;padding:14px;height:calc(100% - 56px)}
-    .card{background:var(--panel);border:1px solid #1a263a;border-radius:14px;padding:12px;box-shadow:0 10px 30px rgba(0,0,0,.25);min-height:0}
-    .title{font-size:12px;color:var(--muted);text-transform:uppercase;letter-spacing:.12em;margin:6px 0 10px}
-    .row{display:grid;gap:8px;margin-bottom:10px}
-    label{font-size:12px;color:var(--muted)}
-    input,select,button{font:inherit}
-    input[type=number],input[type=text],select{width:100%;background:var(--panel2);color:var(--ink);border:1px solid #1a263a;border-radius:10px;padding:8px 10px;outline:none}
-    button{cursor:pointer;border:1px solid #23435f;background:linear-gradient(180deg,#17334b,#13283b);color:#e6f3ff;border-radius:12px;padding:10px 12px;font-weight:600}
-    button.secondary{background:#182233;border-color:#26364d;color:#dbe7f6}
-    button:disabled{opacity:.5;cursor:not-allowed}
-    .hint{color:var(--muted);font-size:12px}
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Neural network playground | Srinjoy Ghosh</title>
+<link rel="icon" type="image/svg+xml" href="../assets/favicon.svg">
+<link rel="stylesheet" href="../assets/lab.css">
+<script src="../assets/lab-bridge.js"></script>
+<style>
+  /* Draw and predict */
+  .dp{container-type:inline-size}
+  .dp-grid{display:grid}
+  .pad-col{width:100%;max-width:440px;margin-inline:auto;min-width:0}
+  #pad{cursor:crosshair;touch-action:none;-webkit-user-select:none;user-select:none}
+  .pad-tools{display:grid;grid-template-columns:auto minmax(0,1fr);align-items:center;gap:14px;padding:2px 14px 12px}
+  .pixels{margin:0;display:grid;justify-items:center;gap:5px}
+  .pixels canvas{width:56px;height:56px;border-radius:8px;image-rendering:pixelated;background:var(--plot);box-shadow:0 0 0 1px var(--line-strong)}
+  .pixels figcaption{font:500 10.5px/1.2 var(--mono);letter-spacing:.06em;text-transform:uppercase;color:var(--faint);white-space:nowrap}
+  .pred-col{display:grid;align-content:start;gap:14px;min-width:0;padding:6px 16px 16px}
+  .pred-head{display:flex;align-items:center;gap:14px;min-height:64px}
+  .pred-digit{flex:none;display:grid;place-items:center;width:64px;height:64px;border-radius:16px;font-size:38px;font-weight:600;line-height:1;letter-spacing:-.04em;color:var(--ink);background:rgba(255,255,255,.05);box-shadow:inset 0 0 0 1px var(--line-strong)}
+  .pred-title{font-size:17px;font-weight:550;letter-spacing:-.02em;color:var(--ink)}
+  @container (min-width:620px){
+    .dp-grid{grid-template-columns:minmax(0,392px) minmax(0,1fr);align-items:start}
+    .pad-col{max-width:none}
+    .pred-col{padding:14px 18px 16px 6px}
+  }
 
-    .canvas-wrap{display:grid;grid-template-columns:1fr auto;gap:10px;align-items:start}
-    #draw{background:#000;border:1px solid #1a263a;border-radius:10px;touch-action:none}
-    .digit-grid{display:grid;grid-template-columns:repeat(10,1fr);gap:6px}
-    .digit-grid button{padding:6px 0;font-weight:700}
+  /* One-series bar list: probabilities and per-class gradient norms */
+  .bars{display:grid;gap:3px;margin:0;padding:0;list-style:none}
+  .bars li{display:grid;grid-template-columns:12px 16px minmax(0,1fr) 62px;align-items:center;gap:8px;min-height:27px;padding:0 10px 0 6px;border-radius:9px;font:500 13px/1 var(--mono);color:var(--muted)}
+  .bars .digit{color:var(--ink);text-align:center}
+  .bars .track{height:10px;border-radius:999px;background:rgba(255,255,255,.07);overflow:hidden}
+  .bars .fill{display:block;width:0;height:100%;border-radius:999px;background:var(--s1);transition:width .45s var(--ease)}
+  .bars .num{text-align:right;color:var(--ink);font-variant-numeric:tabular-nums;white-space:nowrap}
+  .bars .mark{width:0;height:0;border-block:5px solid transparent;border-left:7px solid var(--ink);opacity:0}
+  .bars li.is-top{background:rgba(255,255,255,.06);box-shadow:inset 0 0 0 1px var(--line-strong)}
+  .bars li.is-top .mark{opacity:1}
+  .bars li.is-top .digit,.bars li.is-top .num{font-weight:700}
+  .bars.is-stale .fill{width:0!important}
+  .bars.wide li{grid-template-columns:12px 58px minmax(0,1fr) 72px}
+  .bars.wide .digit{text-align:left}
 
-    .flex{display:flex;gap:10px;flex-wrap:wrap}
-    .grid{display:grid;gap:8px}
-    .cols-2{grid-template-columns:1fr 1fr}
+  .label-row{display:flex;flex-wrap:wrap;align-items:center;gap:12px 18px;padding:14px 16px;border-top:1px solid var(--line)}
+  .label-pick{display:flex;flex:1 1 330px;align-items:center;gap:12px;min-width:0}
+  .label-pick .label{flex:none}
+  .digit-seg{flex:1 1 auto;flex-wrap:nowrap;min-width:0}
+  .digit-seg>button{flex:1 1 0;min-width:0;min-height:36px;padding:0;font:500 14px/1 var(--mono)}
+  .label-actions{display:flex;flex:1 1 300px;flex-wrap:wrap;gap:8px}
+  .label-actions>.btn{flex:1 1 auto}
 
-    .section{border-top:1px solid #1a263a;margin-top:10px;padding-top:10px}
+  /* Training */
+  .panel-body.flush{padding:12px 12px 0}
+  .stats-4{grid-template-columns:repeat(4,minmax(0,1fr))}
+  .stat-value small{display:block;margin-top:5px;font-size:12px;line-height:1.3;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  #lossCanvas{cursor:crosshair;touch-action:pan-y}
 
-    #lossChart{width:100%;height:160px;background:#0f1622;border:1px solid #1a263a;border-radius:10px}
+  /* Neurons, weights and gradients */
+  .viz-head{display:grid;gap:14px;padding-bottom:4px}
+  .viz-context{display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:12px 24px;min-height:56px}
+  .viz-input{display:flex;align-items:center;gap:12px;margin:0;min-width:0;flex:1 1 260px}
+  .viz-input canvas{flex:none;width:56px;height:56px;border-radius:8px;image-rendering:pixelated;box-shadow:0 0 0 1px var(--line-strong)}
+  .viz-input figcaption{font-size:13px;line-height:1.5;color:var(--muted)}
+  .viz-input figcaption b{display:block;font-weight:550;color:var(--ink)}
+  .viz-context .scale{flex:0 1 300px;min-width:200px}
+  .scale-ends span:nth-child(2){text-align:center}
+  .scale-ends span:last-child{text-align:right}
+  .viz-plot{min-height:236px;padding:16px}
+  .tiles{display:grid;gap:10px 8px;grid-template-columns:repeat(auto-fill,minmax(var(--tile,72px),1fr))}
+  .tile{margin:0;display:grid;gap:5px;min-width:0}
+  .tile canvas{width:100%;aspect-ratio:1;border-radius:8px;image-rendering:pixelated;box-shadow:0 0 0 1px var(--line)}
+  .tile figcaption{font:500 11px/1.2 var(--mono);text-align:center;color:var(--muted)}
+  .tiles.cells{gap:5px}
+  /* Ten digits read best as two rows of five. */
+  .tiles.templates{grid-template-columns:repeat(5,minmax(0,1fr));max-width:680px}
+  .cell{display:grid;place-items:center;aspect-ratio:1;border-radius:8px;font:500 11px/1 var(--mono);font-variant-numeric:tabular-nums;color:var(--ink);box-shadow:inset 0 0 0 1px var(--line);cursor:default}
+  .cell.on-light{color:#05060b}
+  .viz-explain{padding:4px 20px 18px}
 
-    .bars{display:grid;grid-template-columns:repeat(10,1fr);gap:6px}
-    .bar{background:#0f1622;border:1px solid #1a263a;border-radius:10px;overflow:hidden}
-    .bar-inner{height:0%;background:linear-gradient(180deg,#5ab0ff,#2b7fcc)}
-    .bar-label{font-size:12px;color:var(--muted);text-align:center;padding:4px}
-
-    .mini{display:grid;grid-template-columns:repeat(8,1fr);gap:6px}
-    .mini canvas{width:100%;aspect-ratio:1/1;border:1px solid #1a263a;border-radius:6px;background:#0f1622}
-
-    .weights-tabs{display:flex;gap:8px;margin-bottom:6px;flex-wrap:wrap}
-    .weights-tabs button{padding:6px 10px}
-    .active{outline:2px solid var(--acc)}
-
-    table{border-collapse:collapse;width:100%}
-    th,td{padding:6px 8px;border-bottom:1px solid #1a263a}
-    th{color:#b6c6da;text-align:left}
-  </style>
-  <script src="../assets/vendor/chart-4.4.1.min.js"></script>
-<link rel="stylesheet" href="../assets/lab-theme.css">
-<script defer src="../assets/lab-bridge.js"></script>
+  /* Sidebar */
+  .counts{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:6px;margin:0;padding:0;list-style:none}
+  .counts li{display:grid;justify-items:center;gap:3px;padding:8px 0 7px;border-radius:10px;background:rgba(255,255,255,.035);box-shadow:inset 0 0 0 1px var(--line)}
+  .counts .d{font:500 11px/1 var(--mono);color:var(--faint)}
+  .counts .n{font-size:17px;font-weight:550;line-height:1.1;color:var(--faint)}
+  .counts li.has .n{color:var(--ink)}
+  .counts li.has .d{color:var(--muted)}
+  .counts li.is-new{animation:nn-flash 1.1s var(--ease)}
+  @keyframes nn-flash{0%{background:rgba(255,255,255,.3);transform:scale(1.08)}100%{background:rgba(255,255,255,.035);transform:none}}
+  .thumbs{display:flex;flex-wrap:wrap;gap:6px;margin:0;padding:0;list-style:none}
+  .thumbs li{display:grid;justify-items:center;gap:3px;font:500 10.5px/1 var(--mono);color:var(--muted)}
+  .thumbs canvas{width:38px;height:38px;border-radius:6px;image-rendering:pixelated;box-shadow:0 0 0 1px var(--line)}
+  .nn-still .fill,.nn-still .counts li{transition:none!important;animation:none!important}
+  @media(max-width:620px){
+    .stats-4{grid-template-columns:repeat(2,minmax(0,1fr))}
+    .label-pick{flex-wrap:wrap}
+    .digit-seg{flex-basis:100%}
+    .digit-seg>button{min-height:40px}
+    .viz-plot{padding:10px}
+    .viz-explain{padding:4px 16px 16px}
+  }
+</style>
 </head>
 <body>
-<aside class="sg-context-note">This small educational model is initialized using synthetic digits. Its predictions are demonstrations, not a handwriting-recognition benchmark.</aside>
-  <header>
-    <h1>Neural Network Playground · from scratch (no libs)</h1>
-    <div class="hint">ReLU + Softmax · Cross-Entropy · Real backprop · Xavier/He init · SGD · Live one-sample BP</div>
+<div class="lab">
+  <header class="lab-head">
+    <div><a class="lab-back" href="../spaces/neural-network-playground/index.html">&larr; Back to portfolio</a><h1>Neural network playground</h1></div>
   </header>
 
-  <div class="wrap">
-    <aside class="card" style="overflow:auto">
-      <div class="title">Draw & Label</div>
-      <div class="canvas-wrap">
-        <canvas id="draw" width="280" height="280"></canvas>
-        <div class="grid" style="width:170px">
-          <div class="row">
-            <label>Brush size</label>
-            <input id="brush" type="range" min="6" max="28" value="18"/>
-          </div>
-          <button id="clear" class="secondary">Clear</button>
-          <div class="row">
-            <label>Selected label</label>
-            <input id="labelDisplay" value="0" disabled />
-          </div>
-          <button id="add">Add to training set</button>
-          <div class="hint" id="count">0 samples</div>
-        </div>
-      </div>
-      <div class="digit-grid" style="margin-top:8px" id="digitGrid"></div>
+  <aside class="lab-note">This small educational model is initialized using synthetic digits. Its predictions are demonstrations, not a handwriting-recognition benchmark.</aside>
 
-      <div class="section">
-        <div class="title">Training</div>
-        <div class="row cols-2">
-          <div>
-            <label>Hidden units</label>
-            <input id="hidden" type="number" value="64" min="8" max="256" />
-          </div>
-          <div>
-            <label>Learning rate</label>
-            <input id="lr" type="number" step="0.001" value="0.1" />
-          </div>
-          <div>
-            <label>Batch size</label>
-            <input id="batch" type="number" value="16" min="1" />
-          </div>
-          <div>
-            <label>Epochs</label>
-            <input id="epochs" type="number" value="20" min="1" />
-          </div>
-          <div>
-            <label>Init</label>
-            <select id="init">
-              <option value="xavier">Xavier (Glorot)</option>
-              <option value="he">He (Kaiming)</option>
-            </select>
-          </div>
-          <div>
-            <label>Shuffle each epoch</label>
-            <select id="shuffle"><option value="yes">yes</option><option value="no">no</option></select>
+  <div class="lab-app">
+    <aside class="lab-side">
+      <section class="group" aria-labelledby="g-net">
+        <h2 class="group-title" id="g-net">Network</h2>
+        <div class="chip-row" aria-label="Network architecture">
+          <span class="chip">784 inputs</span><span class="chip" id="archHidden">64 ReLU</span><span class="chip">10 softmax</span>
+        </div>
+        <div class="field">
+          <label for="hidden">Hidden units</label><output id="hiddenOut" for="hidden">64</output>
+          <input type="range" id="hidden" min="8" max="256" step="8" value="64">
+        </div>
+        <div class="field">
+          <span class="label" id="initLabel">Initialization</span>
+          <div class="seg" id="initSeg" role="group" aria-labelledby="initLabel">
+            <button type="button" data-init="xavier" aria-pressed="false">Xavier (Glorot)</button>
+            <button type="button" data-init="he" aria-pressed="true">He (Kaiming)</button>
           </div>
         </div>
-        <div class="flex">
-          <button id="train">Train Network</button>
-          <button id="predictBtn" class="secondary">Predict Drawing</button>
-        </div>
-        <div class="flex" style="margin-top:8px">
-          <button id="teachBtn">Teach This Drawing (steps)</button>
-          <input id="teachSteps" type="number" value="3" min="1" style="width:70px"/>
-          <label style="display:flex;align-items:center;gap:6px"><input id="autoCorrect" type="checkbox" checked/> auto-correct on wrong pred</label>
-        </div>
-        <div class="hint">Warm start runs automatically on load with synthetic digits so the net isn't blank.</div>
-        <div class="hint" id="pretrainStatus">Pretraining…</div>
-      </div>
+        <dl class="kv"><div><dt>Trainable parameters</dt><dd id="paramCount">50,890</dd></div></dl>
+        <p class="hint">Changing the layer size or the initialization rebuilds the network and repeats the warm start on 150 synthetic digits.</p>
+        <button class="btn btn-block" type="button" id="rebuild"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 12a8 8 0 1 0 2.6-5.9M4 4v5h5"/></svg>Reset to warm start</button>
+      </section>
 
-      <div class="section">
-        <div class="title">Dataset</div>
-        <table id="dataTable"></table>
-      </div>
+      <section class="group" aria-labelledby="g-sgd">
+        <h2 class="group-title" id="g-sgd">Mini-batch SGD</h2>
+        <div class="field">
+          <label for="lr">Learning rate</label><output id="lrOut" for="lr">0.1</output>
+          <input type="range" id="lr" min="0" max="9" step="1" value="6">
+        </div>
+        <div class="field">
+          <label for="batch">Batch size</label><output id="batchOut" for="batch">32</output>
+          <input type="range" id="batch" min="0" max="7" step="1" value="5">
+        </div>
+        <div class="field">
+          <label for="epochs">Epochs</label><output id="epochsOut" for="epochs">8</output>
+          <input type="range" id="epochs" min="1" max="100" step="1" value="8">
+        </div>
+        <label class="check"><input type="checkbox" id="shuffle" checked>Shuffle every epoch</label>
+        <label class="check"><input type="checkbox" id="useSynth" checked>Include the 150 synthetic digits</label>
+        <p class="hint">Train re-initializes the weights, then runs cross-entropy backpropagation over the training set. Without the synthetic digits you need at least 5 drawings of your own.</p>
+      </section>
+
+      <section class="group" aria-labelledby="g-teach">
+        <h2 class="group-title" id="g-teach">Teach</h2>
+        <div class="field">
+          <label for="teachSteps">Steps per teach</label><output id="teachStepsOut" for="teachSteps">3</output>
+          <input type="range" id="teachSteps" min="1" max="20" step="1" value="3">
+        </div>
+        <label class="check"><input type="checkbox" id="autoCorrect" checked>Auto-correct a wrong prediction</label>
+        <p class="hint">A teach step is one SGD update on the current drawing alone. With auto-correct on, Predict teaches the network whenever its answer disagrees with the label you picked.</p>
+      </section>
+
+      <section class="group" aria-labelledby="g-data">
+        <h2 class="group-title" id="g-data">Your training set</h2>
+        <ul class="counts" id="counts" aria-label="Samples per digit"></ul>
+        <ul class="thumbs" id="thumbs" aria-label="Most recent samples" hidden></ul>
+        <p class="hint" id="dataHint">No drawings yet. Draw a digit, pick its label and press Add to training set.</p>
+        <div class="btn-row">
+          <button class="btn" type="button" id="removeLast" disabled>Remove last</button>
+          <button class="btn btn-danger" type="button" id="clearData" disabled>Clear all</button>
+        </div>
+      </section>
+
+      <details class="group">
+        <summary class="group-title">How it works</summary>
+        <div class="explain">
+          <p><strong>Forward.</strong> The drawing is shrunk to 28 &times; 28 = 784 input values, passed through one ReLU hidden layer and turned into 10 class probabilities by a softmax.</p>
+          <p><strong>Backward.</strong> Cross-entropy loss is differentiated by hand: backpropagation yields &part;L/&part;W2 and &part;L/&part;W1, and mini-batch SGD moves every weight against its gradient.</p>
+          <p><strong>Start.</strong> Weights begin as He or Xavier noise, then a short warm start on font-rendered digits gives the network a rough idea of each class.</p>
+        </div>
+      </details>
     </aside>
 
-    <main class="card" style="display:grid;grid-template-rows:auto auto 1fr;gap:10px;overflow:auto">
-      <section>
-        <div class="title">Prediction</div>
-        <div class="bars" id="probs"></div>
-      </section>
-
-      <section>
-        <div class="title">Loss</div>
-        <canvas id="lossChart"></canvas>
-      </section>
-
-      <section style="min-height:0">
-        <div class="title">Neurons, Weights & Gradients (last step)</div>
-        <div class="weights-tabs">
-          <button id="tabHidden" class="active">Hidden activations</button>
-          <button id="tabW1">W1 (input→hidden)</button>
-          <button id="tabBackproj">Back-projected class templates</button>
-          <button id="tabGradW1">|∂L/∂W1| heatmaps</button>
-          <button id="tabGradW2">|∂L/∂W2| bars</button>
+    <main class="lab-stage">
+      <div class="panel">
+        <div class="panel-head">
+          <h2>Draw &amp; predict</h2>
+          <div class="toolbar">
+            <button class="btn btn-ghost" type="button" id="undo" disabled><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 14 4 9l5-5M4 9h10a6 6 0 0 1 0 12h-3"/></svg>Undo</button>
+            <button class="btn" type="button" id="clear" disabled><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 7h16M9 7V4h6v3m-8 0 1 13h8l1-13"/></svg>Clear</button>
+            <button class="btn btn-primary" type="button" id="predict"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M2 12s3.6-7 10-7 10 7 10 7-3.6 7-10 7S2 12 2 12Z"/><circle cx="12" cy="12" r="3"/></svg>Predict</button>
+          </div>
         </div>
-        <div class="mini" id="miniGrid"></div>
-      </section>
+        <div class="dp">
+          <div class="dp-grid">
+            <div class="pad-col">
+              <div class="plot"><canvas id="pad" role="img" aria-label="Drawing pad. Draw one digit with a mouse, pen or finger."></canvas><div class="plot-empty" id="padEmpty">Draw a digit here</div></div>
+              <div class="pad-tools">
+                <figure class="pixels"><canvas id="inputPreview" width="28" height="28" role="img" aria-label="The drawing as the network receives it: 28 by 28 pixels."></canvas><figcaption>784 inputs</figcaption></figure>
+                <div class="field">
+                  <label for="brush">Brush size</label><output id="brushOut" for="brush">18</output>
+                  <input type="range" id="brush" min="6" max="28" value="18">
+                </div>
+              </div>
+            </div>
+            <div class="pred-col">
+              <div class="pred-head">
+                <div class="pred-digit" id="predDigit" aria-hidden="true">?</div>
+                <div><div class="pred-title" id="predTitle">No prediction yet</div><div class="hint" id="predSub">Draw a digit, then press Predict.</div></div>
+              </div>
+              <ol class="bars is-stale" id="probBars" aria-label="Softmax probability of each digit"></ol>
+            </div>
+          </div>
+        </div>
+        <div class="label-row">
+          <div class="label-pick">
+            <span class="label" id="labelTitle">This drawing is a</span>
+            <div class="seg digit-seg" id="labelSeg" role="group" aria-labelledby="labelTitle"></div>
+          </div>
+          <div class="label-actions">
+            <button class="btn" type="button" id="add"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path id="addIcon" d="M12 5v14M5 12h14"/></svg><span id="addLabel">Add to training set</span></button>
+            <button class="btn" type="button" id="teach"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m3 9 9-5 9 5-9 5-9-5Zm4 2.5V16c1.5 1.4 3.2 2 5 2s3.500-.6 5-2v-4.500"/></svg>Teach this drawing</button>
+          </div>
+        </div>
+        <div class="statusbar" id="drawStatus" role="status" aria-live="polite">Draw a digit, then press Predict. Pick its label to add it to the training set or to teach the network.</div>
+      </div>
+
+      <div class="panel">
+        <div class="panel-head">
+          <h2>Training</h2>
+          <div class="toolbar">
+            <button class="btn btn-ghost" type="button" id="stop" disabled><svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M7 7h10v10H7z"/></svg>Stop</button>
+            <button class="btn btn-primary" type="button" id="train"><svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M8 5v14l11-7z"/></svg>Train network</button>
+          </div>
+        </div>
+        <div class="panel-body flush">
+          <div class="stat-grid stats-4">
+            <div class="stat"><span class="stat-label">Loss</span><span class="stat-value"><span id="statLoss">&ndash;</span><small id="statLossNote">cross-entropy</small></span></div>
+            <div class="stat"><span class="stat-label">Accuracy</span><span class="stat-value"><span id="statAcc">&ndash;</span><small id="statAccNote">last epoch</small></span></div>
+            <div class="stat"><span class="stat-label">Samples</span><span class="stat-value"><span id="statSamples">0</span><small id="statSamplesNote">yours, plus 150 synthetic</small></span></div>
+            <div class="stat"><span class="stat-label">Epochs</span><span class="stat-value"><span id="statEpochs">0 / 8</span><small id="statEpochsNote">warm start</small></span></div>
+          </div>
+        </div>
+        <div class="plot"><canvas id="lossCanvas" role="img" aria-label="Line chart of the cross-entropy loss: one point per training epoch, followed by one point per teach step."></canvas><div class="plot-empty" id="lossEmpty">The loss curve appears as soon as the first epoch finishes.</div></div>
+        <div class="statusbar" id="trainStatus" role="status" aria-live="polite">Preparing the warm start on synthetic digits.</div>
+      </div>
+
+      <div class="panel">
+        <div class="panel-head"><h2>Neurons, weights &amp; gradients</h2></div>
+        <div class="panel-body viz-head">
+          <div class="tabs" id="vizTabs" role="tablist" aria-label="What to visualize">
+            <button class="tab" type="button" role="tab" id="tab-hidden" data-tab="hidden" aria-controls="vizPanel" aria-selected="true">Hidden activations</button>
+            <button class="tab" type="button" role="tab" id="tab-w1" data-tab="w1" aria-controls="vizPanel" aria-selected="false" tabindex="-1">W1 input&rarr;hidden</button>
+            <button class="tab" type="button" role="tab" id="tab-back" data-tab="back" aria-controls="vizPanel" aria-selected="false" tabindex="-1">Class templates</button>
+            <button class="tab" type="button" role="tab" id="tab-gw1" data-tab="gw1" aria-controls="vizPanel" aria-selected="false" tabindex="-1">|&part;L/&part;W1| heatmaps</button>
+            <button class="tab" type="button" role="tab" id="tab-gw2" data-tab="gw2" aria-controls="vizPanel" aria-selected="false" tabindex="-1">|&part;L/&part;W2| bars</button>
+          </div>
+          <div class="viz-context">
+            <figure class="viz-input"><canvas id="vizThumb" width="28" height="28" role="img" aria-label="The input image this view refers to."></canvas><figcaption id="vizCaption"></figcaption></figure>
+            <div class="scale" id="vizScale"><div class="scale-bar" id="vizScaleBar"></div><div class="scale-ends"><span id="scaleLow"></span><span id="scaleMid"></span><span id="scaleHigh"></span></div></div>
+          </div>
+        </div>
+        <div class="plot viz-plot" id="vizPanel" role="tabpanel" aria-labelledby="tab-hidden" tabindex="0">
+          <div class="tiles" id="tiles"></div>
+          <ol class="bars wide" id="gradBars" aria-label="Summed gradient magnitude per output class" hidden></ol>
+          <div class="plot-empty" id="vizEmpty" hidden>Gradients appear after the first SGD step.</div>
+        </div>
+        <p class="explain viz-explain" id="vizExplain"></p>
+      </div>
     </main>
   </div>
+</div>
 
 <script>
-// ========= Linear algebra helpers =========
-function zeros(r,c){ const a=new Float32Array(r*c); return {r,c,a}; }
-function randn(){ let u=0,v=0; while(u===0)u=Math.random(); while(v===0)v=Math.random(); return Math.sqrt(-2*Math.log(u))*Math.cos(2*Math.PI*v); }
-function matmul(A,B){ const {r:aR,c:aC,a:a} = A, {r:bR,c:bC,a:b}=B; const out=zeros(aR,bC); for(let i=0;i<aR;i++){ for(let k=0;k<aC;k++){ const av=a[i*aC+k]; for(let j=0;j<bC;j++) out.a[i*bC+j]+=av*b[k*bC+j]; } } return out; }
-function addBias(X,b){ const out=zeros(X.r,X.c); for(let i=0;i<X.r;i++){ for(let j=0;j<X.c;j++){ out.a[i*X.c+j]=X.a[i*X.c+j]+b[j]; } } return out; }
-function relu(X){ const Y=zeros(X.r,X.c); for(let i=0;i<X.r;i++){ for(let j=0;j<X.c;j++){ const v=X.a[i*X.c+j]; Y.a[i*X.c+j]=v>0?v:0; } } return Y; }
-function reluGrad(X){ const G=new Float32Array(X.a.length); for(let i=0;i<G.length;i++) G[i]=X.a[i]>0?1:0; return G; }
-function softmaxRow(v){ const m=Math.max(...v); const ex=v.map(x=>Math.exp(x-m)); const s=ex.reduce((p,c)=>p+c,0); return ex.map(e=>e/s); }
+(() => {
+  'use strict';
+  const $ = id => document.getElementById(id);
+  const INPUT = 784, CLASSES = 10, PAD = 280;
+  const RATES = [0.001, 0.003, 0.005, 0.01, 0.03, 0.05, 0.1, 0.2, 0.3, 0.5];
+  const BATCHES = [1, 2, 4, 8, 16, 32, 64, 128];
+  const WARM = { lr: 0.1, batch: 32, epochs: 8 };          // the original warm-start recipe
+  const MONO = "'Geist Mono', ui-monospace, Consolas, monospace";
+  if (SGLab.reducedMotion) document.documentElement.classList.add('nn-still');
 
-// ========= Network =========
-class MLP{
-  constructor(input, hidden, output, init='xavier', lr=0.1){
-    this.input=input; this.hidden=hidden; this.output=output; this.lr=lr; this.init=init;
-    this.W1=zeros(input,hidden); this.b1=new Float32Array(hidden);
-    this.W2=zeros(hidden,output); this.b2=new Float32Array(output);
-    const initPair=(fanIn,fanOut)=>{ if(init==='he'){ const s=Math.sqrt(2/fanIn); return ()=>randn()*s; } const s=Math.sqrt(6/(fanIn+fanOut)); return ()=> (Math.random()*2-1)*s; };
-    const f1=initPair(input,hidden), f2=initPair(hidden,output);
-    for(let i=0;i<this.W1.a.length;i++) this.W1.a[i]=f1();
-    for(let i=0;i<this.W2.a.length;i++) this.W2.a[i]=f2();
+  /* --------------------------------------------------------- Linear algebra */
+  function zeros(r, c) { return { r, c, a: new Float32Array(r * c) }; }
+  function randn() { let u = 0, v = 0; while (u === 0) u = Math.random(); while (v === 0) v = Math.random(); return Math.sqrt(-2 * Math.log(u)) * Math.cos(2 * Math.PI * v); }
+  function matmul(A, B) {
+    const { r: aR, c: aC, a } = A, { c: bC, a: b } = B, out = zeros(aR, bC);
+    for (let i = 0; i < aR; i++) for (let k = 0; k < aC; k++) { const av = a[i * aC + k]; if (av === 0) continue; for (let j = 0; j < bC; j++) out.a[i * bC + j] += av * b[k * bC + j]; }
+    return out;
   }
-  forward(Xbatch){
-    this.X = Xbatch; // save
-    this.Z1 = addBias(matmul(Xbatch, this.W1), this.b1);
-    this.A1 = relu(this.Z1);
-    this.Z2 = addBias(matmul(this.A1, this.W2), this.b2);
-    this.P = {r:this.Z2.r, c:this.Z2.c, a:new Float32Array(this.Z2.a)};
-    this.probs=[];
-    for(let i=0;i<this.Z2.r;i++){
-      const row=[]; for(let j=0;j<this.Z2.c;j++) row.push(this.Z2.a[i*this.Z2.c+j]);
-      const s=softmaxRow(row); this.probs.push(s); for(let j=0;j<this.Z2.c;j++) this.P.a[i*this.Z2.c+j]=s[j];
+  function transpose(M) { const T = { r: M.c, c: M.r, a: new Float32Array(M.a.length) }; for (let i = 0; i < M.r; i++) for (let j = 0; j < M.c; j++) T.a[j * M.r + i] = M.a[i * M.c + j]; return T; }
+  function addBias(X, b) { const out = zeros(X.r, X.c); for (let i = 0; i < X.r; i++) for (let j = 0; j < X.c; j++) out.a[i * X.c + j] = X.a[i * X.c + j] + b[j]; return out; }
+  function relu(X) { const Y = zeros(X.r, X.c); for (let i = 0; i < X.a.length; i++) { const v = X.a[i]; Y.a[i] = v > 0 ? v : 0; } return Y; }
+  function softmaxRow(v) { const m = Math.max(...v), ex = v.map(x => Math.exp(x - m)), s = ex.reduce((p, c) => p + c, 0); return ex.map(e => e / s); }
+  function argMax(a) { let best = 0; for (let i = 1; i < a.length; i++) if (a[i] > a[best]) best = i; return best; }
+
+  /* ---------------------------------------------------------------- Network */
+  // 784 inputs -> ReLU hidden layer -> 10 softmax outputs, trained with cross-entropy and plain SGD.
+  class MLP {
+    constructor(input, hidden, output, init, lr) {
+      this.input = input; this.hidden = hidden; this.output = output; this.lr = lr; this.init = init;
+      this.W1 = zeros(input, hidden); this.b1 = new Float32Array(hidden);
+      this.W2 = zeros(hidden, output); this.b2 = new Float32Array(output);
+      const initPair = (fanIn, fanOut) => {
+        if (init === 'he') { const s = Math.sqrt(2 / fanIn); return () => randn() * s; }
+        const s = Math.sqrt(6 / (fanIn + fanOut)); return () => (Math.random() * 2 - 1) * s;
+      };
+      const f1 = initPair(input, hidden), f2 = initPair(hidden, output);
+      for (let i = 0; i < this.W1.a.length; i++) this.W1.a[i] = f1();
+      for (let i = 0; i < this.W2.a.length; i++) this.W2.a[i] = f2();
     }
-    return this.P;
-  }
-  loss(yIdx){ let L=0; for(let i=0;i<yIdx.length;i++){ const p=this.probs[i][yIdx[i]]; L+=-Math.log(Math.max(p,1e-12)); } return L/yIdx.length; }
-  backward(yIdx, storeGrads=false){
-    const n = this.X.r, D = this.output;
-    const dZ2 = zeros(n,D);
-    for(let i=0;i<n;i++){ for(let j=0;j<D;j++){ dZ2.a[i*D+j]=this.P.a[i*D+j] - (j===yIdx[i]?1:0); } }
-    const A1T = {r:this.A1.c,c:this.A1.r,a:new Float32Array(this.A1.a.length)};
-    for(let i=0;i<this.A1.r;i++) for(let j=0;j<this.A1.c;j++) A1T.a[j*this.A1.r+i]=this.A1.a[i*this.A1.c+j];
-    const dW2 = matmul(A1T, dZ2);
-    const db2 = new Float32Array(D); for(let i=0;i<dZ2.a.length;i++) db2[i%D]+=dZ2.a[i];
-
-    const W2T = {r:this.W2.c,c:this.W2.r,a:new Float32Array(this.W2.a.length)};
-    for(let i=0;i<this.W2.r;i++) for(let j=0;j<this.W2.c;j++) W2T.a[j*this.W2.r+i]=this.W2.a[i*this.W2.c+j];
-    let dA1 = matmul(dZ2, W2T);
-    const R = reluGrad(this.Z1); for(let i=0;i<dA1.a.length;i++) dA1.a[i]*=R[i];
-
-    const XT = {r:this.X.c,c:this.X.r,a:new Float32Array(this.X.a.length)};
-    for(let i=0;i<this.X.r;i++) for(let j=0;j<this.X.c;j++) XT.a[j*this.X.r+i]=this.X.a[i*this.X.c+j];
-    const dW1 = matmul(XT, dA1);
-    const db1 = new Float32Array(this.hidden); for(let i=0;i<dA1.a.length;i++) db1[i%this.hidden]+=dA1.a[i];
-
-    const rate = this.lr / n;
-    for(let i=0;i<this.W2.a.length;i++) this.W2.a[i]-=rate*dW2.a[i];
-    for(let j=0;j<this.b2.length;j++) this.b2[j]-=rate*db2[j];
-    for(let i=0;i<this.W1.a.length;i++) this.W1.a[i]-=rate*dW1.a[i];
-    for(let j=0;j<this.b1.length;j++) this.b1[j]-=rate*db1[j];
-
-    if(storeGrads){ this.lastGradW1=dW1; this.lastGradW2=dW2; this.lastDb1=db1; this.lastDb2=db2; }
-  }
-  predictProbs(x){ const X = {r:1,c:this.input,a:new Float32Array(x)}; const Z1 = addBias(matmul(X,this.W1), this.b1); const A1 = relu(Z1); const Z2 = addBias(matmul(A1,this.W2), this.b2); const row=[]; for(let j=0;j<this.output;j++) row.push(Z2.a[j]); return softmaxRow(row); }
-}
-
-// ========= UI + Data =========
-const draw = document.getElementById('draw');
-const ctx = draw.getContext('2d'); ctx.fillStyle = 'black'; ctx.fillRect(0,0,draw.width,draw.height); let drawing=false, brush=+document.getElementById('brush').value; ctx.lineCap='round'; ctx.lineJoin='round'; ctx.strokeStyle='white';
-function pos(evt){ const r=draw.getBoundingClientRect(); const x=(evt.touches?evt.touches[0].clientX:evt.clientX)-r.left; const y=(evt.touches?evt.touches[0].clientY:evt.clientY)-r.top; return {x,y}; }
-function start(e){ drawing=true; const p=pos(e); ctx.lineWidth=brush; ctx.beginPath(); ctx.moveTo(p.x,p.y); }
-function move(e){ if(!drawing) return; const p=pos(e); ctx.lineWidth=brush; ctx.lineTo(p.x,p.y); ctx.stroke(); }
-function end(){ drawing=false; }
-
-draw.addEventListener('mousedown',start); draw.addEventListener('mousemove',move); window.addEventListener('mouseup',end);
-
-draw.addEventListener('touchstart', e=>{e.preventDefault(); start(e)} ,{passive:false});
-draw.addEventListener('touchmove', e=>{e.preventDefault(); move(e)} ,{passive:false});
-draw.addEventListener('touchend', e=>{e.preventDefault(); end(e)} ,{passive:false});
-
-document.getElementById('brush').addEventListener('input',e=>brush=+e.target.value);
-
-document.getElementById('clear').onclick=()=>{ ctx.fillStyle='black'; ctx.fillRect(0,0,draw.width,draw.height); ctx.fillStyle='white'; };
-
-// label buttons 0-9
-const digitGrid=document.getElementById('digitGrid'); let currentLabel=0; const labelDisplay=document.getElementById('labelDisplay'); for(let d=0; d<10; d++){ const btn=document.createElement('button'); btn.textContent=d; btn.onclick=()=>{ currentLabel=d; labelDisplay.value=String(d); }; digitGrid.appendChild(btn); }
-
-// dataset storage
-const data=[]; const countEl=document.getElementById('count'); const table=document.getElementById('dataTable');
-function refreshTable(){ table.innerHTML=''; const thead=document.createElement('thead'); thead.innerHTML='<tr><th>#</th><th>label</th><th>preview</th></tr>'; table.appendChild(thead); const tb=document.createElement('tbody'); data.forEach((row,i)=>{ const tr=document.createElement('tr'); const td0=document.createElement('td'); td0.textContent=String(i+1); tr.appendChild(td0); const td1=document.createElement('td'); td1.textContent=String(row.y); tr.appendChild(td1); const td2=document.createElement('td'); const c=document.createElement('canvas'); c.width=28; c.height=28; drawDigitToCanvas(row.x,c); c.style.imageRendering='pixelated'; c.style.width='56px'; c.style.height='56px'; td2.appendChild(c); tr.appendChild(td2); tb.appendChild(tr); }); table.appendChild(tb); countEl.textContent=`${data.length} samples`; }
-
-function downsample(){ const tmp=document.createElement('canvas'); tmp.width=28; tmp.height=28; const tctx=tmp.getContext('2d'); tctx.fillStyle='black'; tctx.fillRect(0,0,28,28); tctx.drawImage(draw,0,0,28,28); const img=tctx.getImageData(0,0,28,28).data; const x=new Float32Array(28*28); for(let i=0;i<28*28;i++){ const r=img[i*4+0], g=img[i*4+1], b=img[i*4+2]; const v=(r+g+b)/3/255; x[i]=v; } return x; }
-function drawDigitToCanvas(x, canvas){ const c=canvas.getContext('2d'); const img=c.createImageData(28,28); for(let i=0;i<28*28;i++){ const v=Math.max(0,Math.min(255,Math.round(x[i]*255))); img.data[i*4+0]=v; img.data[i*4+1]=v; img.data[i*4+2]=v; img.data[i*4+3]=255; } c.putImageData(img,0,0); }
-
-document.getElementById('add').onclick=()=>{ const x=downsample(); data.push({x,y:currentLabel}); refreshTable(); };
-
-// ========= Training =========
-let net=null; let chart=null; const probsEl=document.getElementById('probs');
-for(let i=0;i<10;i++){ const wrap=document.createElement('div'); wrap.className='bar'; const inner=document.createElement('div'); inner.className='bar-inner'; inner.style.height='0%'; const lab=document.createElement('div'); lab.className='bar-label'; lab.textContent=String(i); wrap.appendChild(inner); wrap.appendChild(lab); probsEl.appendChild(wrap); }
-
-const lossCanvas=document.getElementById('lossChart'); chart=new Chart(lossCanvas,{type:'line',data:{labels:[],datasets:[{label:'loss',data:[],tension:.2}]},options:{plugins:{legend:{display:false}},scales:{x:{ticks:{display:false}}}}});
-function* batches(arr, size){ for(let i=0;i<arr.length;i+=size) yield arr.slice(i,i+size); }
-function shuffle(a){ for(let i=a.length-1;i>0;i--){ const j=Math.floor(Math.random()*(i+1)); [a[i],a[j]]=[a[j],a[i]]; } }
-
-async function train(trainData=data){ if(trainData.length<5){ alert('Add more samples first.'); return; } const hidden=+document.getElementById('hidden').value; const lr=+document.getElementById('lr').value; const batch=+document.getElementById('batch').value; const epochs=+document.getElementById('epochs').value; const init=document.getElementById('init').value; const doShuffle=document.getElementById('shuffle').value==='yes'; net=new MLP(784, hidden, 10, init, lr); chart.data.labels=[]; chart.data.datasets[0].data=[]; chart.update(); let order=[...trainData.keys()]; for(let ep=0; ep<epochs; ep++){ if(doShuffle) shuffle(order); let epochLoss=0, seen=0; for(const idxBatch of batches(order, batch)){ const X=zeros(idxBatch.length, 784); const yIdx=[]; for(let i=0;i<idxBatch.length;i++){ const row=trainData[idxBatch[i]]; yIdx.push(row.y); X.a.set(row.x, i*784); } net.forward(X); const L=net.loss(yIdx); epochLoss += L*idxBatch.length; seen += idxBatch.length; net.backward(yIdx, ep===epochs-1); } const avg=epochLoss/seen; chart.data.labels.push(ep+1); chart.data.datasets[0].data.push(avg); chart.update(); await new Promise(r=>setTimeout(r,10)); } }
-
-function updateBars(p){ const bars=probsEl.querySelectorAll('.bar-inner'); for(let i=0;i<10;i++){ bars[i].style.height=(p[i]*100).toFixed(1)+'%'; bars[i].parentElement.style.outline = i===argMax(p)?'2px solid var(--ok)':'1px solid #1a263a'; } }
-function argMax(a){ let m=-1,mi=0; for(let i=0;i<a.length;i++){ if(a[i]>m){ m=a[i]; mi=i; } } return mi; }
-
-function predictCurrent(){ if(!net){ alert('Model not ready yet.'); return; } const x=downsample(); const p=net.predictProbs(x); updateBars(p); renderHiddenAndWeights(x); const auto=document.getElementById('autoCorrect').checked; const target=currentLabel; const pred=argMax(p); if(auto && pred!==target){ teachOnSample({x, y: target}, +document.getElementById('teachSteps').value); const p2=net.predictProbs(x); updateBars(p2); renderHiddenAndWeights(x); } }
-
-async function teachOnSample(sample, steps=1){ if(!net){ // if not trained yet, quick init
-    net=new MLP(784, +document.getElementById('hidden').value, 10, document.getElementById('init').value, +document.getElementById('lr').value);
-  }
-  for(let s=0;s<steps;s++){
-    const X=zeros(1,784); X.a.set(sample.x,0); net.forward(X); chart.data.labels.push(`t${chart.data.labels.length+1}`); const L=net.loss([sample.y]); chart.data.datasets[0].data.push(L); chart.update(); net.backward([sample.y], true); await new Promise(r=>setTimeout(r,0));
-  }
-}
-
-document.getElementById('train').onclick=()=>train();
-document.getElementById('predictBtn').onclick=predictCurrent;
-document.getElementById('teachBtn').onclick=()=>{ const x=downsample(); teachOnSample({x, y: currentLabel}, +document.getElementById('teachSteps').value).then(()=>{ updateBars(net.predictProbs(x)); renderHiddenAndWeights(x); }); };
-
-// ========= Neurons & Weights & Gradients visualization =========
-const mini=document.getElementById('miniGrid'); const tabHidden=document.getElementById('tabHidden'); const tabW1=document.getElementById('tabW1'); const tabBack=document.getElementById('tabBackproj'); const tabGradW1=document.getElementById('tabGradW1'); const tabGradW2=document.getElementById('tabGradW2'); let currentTab='hidden';
-function clearMini(){ mini.innerHTML=''; tabHidden.classList.remove('active'); tabW1.classList.remove('active'); tabBack.classList.remove('active'); tabGradW1.classList.remove('active'); tabGradW2.classList.remove('active'); }
-function setTab(t){ currentTab=t; clearMini(); if(t==='hidden') tabHidden.classList.add('active'); if(t==='w1') tabW1.classList.add('active'); if(t==='back') tabBack.classList.add('active'); if(t==='gw1') tabGradW1.classList.add('active'); if(t==='gw2') tabGradW2.classList.add('active'); renderMini(); }
-
-tabHidden.onclick=()=>setTab('hidden'); tabW1.onclick=()=>setTab('w1'); tabBack.onclick=()=>setTab('back'); tabGradW1.onclick=()=>setTab('gw1'); tabGradW2.onclick=()=>setTab('gw2');
-
-function renderHiddenAndWeights(x){ renderMini(x); }
-
-function renderMini(x){ mini.innerHTML=''; if(!net) return; if(currentTab==='hidden'){ const X={r:1,c:784,a:new Float32Array(x||downsample())}; const Z1=addBias(matmul(X, net.W1), net.b1); const A1=relu(Z1); const H=A1.a; const Hn=[...H]; const max=Math.max(...Hn)+1e-9; for(let i=0;i<Math.min(64, net.hidden); i++){ const c=document.createElement('canvas'); c.width=28; c.height=28; const g=c.getContext('2d'); const v=H[i]/max; g.fillStyle=`rgb(${Math.floor((1-v)*40)},${Math.floor(100+v*120)},${Math.floor(220)})`; g.fillRect(0,0,28,28); const lbl=document.createElement('div'); lbl.style.textAlign='center'; lbl.style.fontSize='11px'; lbl.style.color='var(--muted)'; lbl.textContent=`h${i}=${H[i].toFixed(2)}`; const wrap=document.createElement('div'); wrap.appendChild(c); wrap.appendChild(lbl); mini.appendChild(wrap); } } else if(currentTab==='w1'){ const H=Math.min(32, net.hidden); for(let h=0; h<H; h++){ const can=document.createElement('canvas'); can.width=28; can.height=28; const g=can.getContext('2d'); const w = new Float32Array(28*28); for(let i=0;i<28*28;i++) w[i]=net.W1.a[i*net.hidden + h]; paintHeatmap(g,w); mini.appendChild(can); } } else if(currentTab==='back'){ for(let k=0;k<10;k++){ const back = new Float32Array(28*28); for(let i=0;i<28*28;i++){ let s=0; for(let h=0; h<net.hidden; h++) s += net.W1.a[i*net.hidden+h] * net.W2.a[h*10+k]; back[i]=s; } const can=document.createElement('canvas'); can.width=28; can.height=28; const g=can.getContext('2d'); paintHeatmap(g, back); const lbl=document.createElement('div'); lbl.style.textAlign='center'; lbl.style.fontSize='11px'; lbl.style.color='var(--muted)'; lbl.textContent=`class ${k}`; const wrap=document.createElement('div'); wrap.appendChild(can); wrap.appendChild(lbl); mini.appendChild(wrap); } } else if(currentTab==='gw1'){ // gradient heatmap for W1 (abs)
-    if(!net.lastGradW1){ const msg=document.createElement('div'); msg.textContent='Do a train/teach step to see gradients.'; msg.className='hint'; mini.appendChild(msg); return; }
-    const H=Math.min(32, net.hidden); for(let h=0; h<H; h++){ const can=document.createElement('canvas'); can.width=28; can.height=28; const g=can.getContext('2d'); const w = new Float32Array(28*28); for(let i=0;i<28*28;i++) w[i]=Math.abs(net.lastGradW1.a[i*net.hidden + h]); paintHeatmap(g,w); mini.appendChild(can); }
-  } else if(currentTab==='gw2'){ // show |dW2| per class as bar labels
-    const tbl=document.createElement('table'); const thead=document.createElement('thead'); thead.innerHTML='<tr><th>class</th><th>‖∂L/∂W2[:,k]‖₁</th></tr>'; tbl.appendChild(thead); const tb=document.createElement('tbody'); for(let k=0;k<10;k++){ let s=0; for(let h=0; h<net.hidden; h++) s+=Math.abs(net.lastGradW2?net.lastGradW2.a[h*10+k]:0); const tr=document.createElement('tr'); tr.innerHTML=`<td>${k}</td><td>${s.toFixed(3)}</td>`; tb.appendChild(tr); } tbl.appendChild(tb); mini.appendChild(tbl);
-  }
-}
-
-function paintHeatmap(g, arr){ const min=Math.min(...arr), max=Math.max(...arr); const span=(max-min)||1; const img=g.createImageData(28,28); for(let i=0;i<28*28;i++){ const v=(arr[i]-min)/span; const r = Math.floor(255*v); const b = Math.floor(255*(1-v)); const idx=i*4; img.data[idx]=r; img.data[idx+1]=img.data[idx+2]=0; img.data[idx+3]=255; img.data[idx+2]=b; } g.putImageData(img,0,0); g.canvas.style.imageRendering='pixelated'; g.canvas.style.width='56px'; g.canvas.style.height='56px'; }
-
-// initial bars state
-updateBars(new Array(10).fill(0)); setTab('hidden');
-
-// ========= Warm-start pretraining =========
-const pretrainStatus=document.getElementById('pretrainStatus');
-(async function warmStart(){
-  // synthesize simple digit sprites by drawing font glyphs with jitter
-  function synthDigits(nPerClass=15){
-    const samples=[]; const off=document.createElement('canvas'); off.width=28; off.height=28; const g=off.getContext('2d');
-    for(let d=0; d<10; d++){
-      for(let i=0;i<nPerClass;i++){
-        g.clearRect(0,0,28,28); g.fillStyle='black'; g.fillRect(0,0,28,28); g.fillStyle='white';
-        const jitterX=(Math.random()*6-3), jitterY=(Math.random()*6-3); const size=20+Math.random()*6; g.font=`${size}px monospace`; g.textAlign='center'; g.textBaseline='middle'; g.fillText(String(d), 14+jitterX, 16+jitterY);
-        const img=g.getImageData(0,0,28,28).data; const x=new Float32Array(28*28); for(let p=0;p<28*28;p++){ const r=img[p*4]; const v=r/255; x[p]=v; }
-        samples.push({x, y:d});
+    forward(X) {
+      this.X = X;
+      this.Z1 = addBias(matmul(X, this.W1), this.b1);
+      this.A1 = relu(this.Z1);
+      this.Z2 = addBias(matmul(this.A1, this.W2), this.b2);
+      this.P = zeros(this.Z2.r, this.Z2.c);
+      this.probs = [];
+      for (let i = 0; i < this.Z2.r; i++) {
+        const s = softmaxRow(Array.from(this.Z2.a.subarray(i * this.Z2.c, (i + 1) * this.Z2.c)));
+        this.probs.push(s);
+        this.P.a.set(s, i * this.Z2.c);
       }
+      return this.P;
     }
-    return samples;
+    loss(y) { let L = 0; for (let i = 0; i < y.length; i++) L += -Math.log(Math.max(this.probs[i][y[i]], 1e-12)); return L / y.length; }
+    backward(y, storeGrads) {
+      const n = this.X.r, D = this.output;
+      const dZ2 = zeros(n, D);
+      for (let i = 0; i < n; i++) for (let j = 0; j < D; j++) dZ2.a[i * D + j] = this.P.a[i * D + j] - (j === y[i] ? 1 : 0);
+      const dW2 = matmul(transpose(this.A1), dZ2);
+      const db2 = new Float32Array(D); for (let i = 0; i < dZ2.a.length; i++) db2[i % D] += dZ2.a[i];
+      const dA1 = matmul(dZ2, transpose(this.W2));
+      for (let i = 0; i < dA1.a.length; i++) if (!(this.Z1.a[i] > 0)) dA1.a[i] = 0;          // ReLU gradient
+      const dW1 = matmul(transpose(this.X), dA1);
+      const db1 = new Float32Array(this.hidden); for (let i = 0; i < dA1.a.length; i++) db1[i % this.hidden] += dA1.a[i];
+      const rate = this.lr / n;
+      for (let i = 0; i < this.W2.a.length; i++) this.W2.a[i] -= rate * dW2.a[i];
+      for (let j = 0; j < D; j++) this.b2[j] -= rate * db2[j];
+      for (let i = 0; i < this.W1.a.length; i++) this.W1.a[i] -= rate * dW1.a[i];
+      for (let j = 0; j < this.hidden; j++) this.b1[j] -= rate * db1[j];
+      if (storeGrads) { this.lastGradW1 = dW1; this.lastGradW2 = dW2; }
+    }
+    hiddenFor(x) { return relu(addBias(matmul({ r: 1, c: this.input, a: x }, this.W1), this.b1)).a; }
+    predictProbs(x) {
+      const A1 = relu(addBias(matmul({ r: 1, c: this.input, a: x }, this.W1), this.b1));
+      return softmaxRow(Array.from(addBias(matmul(A1, this.W2), this.b2).a));
+    }
   }
-  const synth = synthDigits(15); // 150 samples
-  document.getElementById('hidden').value = 64; document.getElementById('lr').value = 0.1; document.getElementById('batch').value = 32; document.getElementById('epochs').value = 8; document.getElementById('init').value='he';
-  await train(synth);
-  pretrainStatus.textContent = 'Pretrained on synthetic digits. Add your own and keep teaching in real time.';
+
+  /* ------------------------------------------------------------------ State */
+  let net = null;
+  let init = 'he';
+  let label = null;             // nothing is assumed about a drawing until the visitor says what it is
+  let strokes = [];
+  let active = null;
+  let samples = [];             // the visitor's own labelled drawings
+  let history = [];             // loss curve: {kind:'epoch'|'teach', n, loss}
+  let job = 0;                  // bumping it stops any training loop that is still running
+  let training = false;
+  let tab = 'hidden';
+  let gradSource = null;        // what produced the stored gradients
+  let hoverPoint = -1;
+  const synth = synthDigits(15);
+
+  // Font-rendered digits with jitter: the same recipe the original used for its warm start.
+  function synthDigits(perClass) {
+    const out = [], off = document.createElement('canvas'); off.width = off.height = 28;
+    const g = off.getContext('2d', { willReadFrequently: true });
+    for (let d = 0; d < 10; d++) for (let i = 0; i < perClass; i++) {
+      g.fillStyle = 'black'; g.fillRect(0, 0, 28, 28); g.fillStyle = 'white';
+      const jx = Math.random() * 6 - 3, jy = Math.random() * 6 - 3, size = 20 + Math.random() * 6;
+      g.font = `${size}px monospace`; g.textAlign = 'center'; g.textBaseline = 'middle';
+      g.fillText(String(d), 14 + jx, 16 + jy);
+      const img = g.getImageData(0, 0, 28, 28).data, x = new Float32Array(INPUT);
+      for (let p = 0; p < INPUT; p++) x[p] = img[p * 4] / 255;
+      out.push({ x, y: d });
+    }
+    return out;
+  }
+
+  /* ------------------------------------------------------------ Drawing pad */
+  const padView = SGLab.fitCanvas($('pad'), PAD, PAD, () => drawPad());
+  const ink = document.createElement('canvas'); ink.width = ink.height = PAD;
+  const small = document.createElement('canvas'); small.width = small.height = 28;
+
+  function paintStrokes(ctx, color) {
+    ctx.lineCap = 'round'; ctx.lineJoin = 'round'; ctx.strokeStyle = color; ctx.fillStyle = color;
+    for (const s of strokes) {
+      if (s.points.length === 1) { ctx.beginPath(); ctx.arc(s.points[0].x, s.points[0].y, s.size / 2, 0, Math.PI * 2); ctx.fill(); continue; }
+      ctx.lineWidth = s.size; ctx.beginPath();
+      s.points.forEach((p, i) => (i ? ctx.lineTo(p.x, p.y) : ctx.moveTo(p.x, p.y)));
+      ctx.stroke();
+    }
+  }
+  function drawPad() {
+    padView.begin();
+    const ctx = padView.ctx;
+    ctx.strokeStyle = SGLab.grid(); ctx.lineWidth = padView.px(1); ctx.beginPath();
+    for (let v = 70; v < PAD; v += 70) { ctx.moveTo(v, 0); ctx.lineTo(v, PAD); ctx.moveTo(0, v); ctx.lineTo(PAD, v); }
+    ctx.stroke();
+    paintStrokes(ctx, SGLab.ink());
+  }
+  // White on black at 280px, then shrunk to 28 x 28 and read as 784 grey levels in 0..1.
+  function currentInput() {
+    const g = ink.getContext('2d'); g.fillStyle = 'black'; g.fillRect(0, 0, PAD, PAD); paintStrokes(g, 'white');
+    const t = small.getContext('2d', { willReadFrequently: true }); t.fillStyle = 'black'; t.fillRect(0, 0, 28, 28); t.drawImage(ink, 0, 0, 28, 28);
+    const img = t.getImageData(0, 0, 28, 28).data, x = new Float32Array(INPUT);
+    for (let i = 0; i < INPUT; i++) x[i] = (img[i * 4] + img[i * 4 + 1] + img[i * 4 + 2]) / 3 / 255;
+    return x;
+  }
+  function paintGrey(canvas, x) {
+    const c = canvas.getContext('2d'), img = c.createImageData(28, 28);
+    for (let i = 0; i < INPUT; i++) { const v = Math.max(0, Math.min(255, Math.round(x[i] * 255))); img.data[i * 4] = img.data[i * 4 + 1] = img.data[i * 4 + 2] = v; img.data[i * 4 + 3] = 255; }
+    c.putImageData(img, 0, 0);
+  }
+  const hasDrawing = () => strokes.length > 0;
+
+  function drawingChanged() {
+    $('padEmpty').hidden = hasDrawing();
+    $('undo').disabled = $('clear').disabled = !hasDrawing();
+    drawPad();
+    paintGrey($('inputPreview'), hasDrawing() ? currentInput() : new Float32Array(INPUT));
+    if (!hasDrawing()) { setLabel(null); showPrediction(null); } else if (net) showPrediction(net.predictProbs(currentInput()), true);
+    renderViz();
+    syncActions();
+  }
+  const pad = $('pad');
+  pad.addEventListener('pointerdown', event => {
+    if (event.button > 0) return;
+    pad.setPointerCapture(event.pointerId);
+    active = { size: Number($('brush').value), points: [padView.toLogical(event)] };
+    strokes.push(active);
+    $('padEmpty').hidden = true;
+    drawPad();
+  });
+  pad.addEventListener('pointermove', event => { if (!active) return; active.points.push(padView.toLogical(event)); drawPad(); });
+  const endStroke = () => { if (!active) return; active = null; drawingChanged(); };
+  pad.addEventListener('pointerup', endStroke);
+  pad.addEventListener('pointercancel', endStroke);
+  $('undo').addEventListener('click', () => { strokes.pop(); drawingChanged(); });
+  $('clear').addEventListener('click', () => { strokes = []; drawingChanged(); setStatus('drawStatus', 'idle', 'Pad cleared. Draw another digit.'); });
+  $('brush').addEventListener('input', event => { $('brushOut').textContent = event.target.value; });
+
+  /* ------------------------------------------------------------- Prediction */
+  const probBars = $('probBars');
+  function buildBars(list, names) {
+    list.textContent = '';
+    names.forEach(name => {
+      const li = document.createElement('li');
+      li.innerHTML = '<span class="mark" aria-hidden="true"></span><span class="digit"></span><span class="track"><span class="fill"></span></span><span class="num"></span>';
+      li.querySelector('.digit').textContent = name;
+      list.append(li);
+    });
+  }
+  function fillBars(list, values, format, top) {
+    const max = Math.max(...values, 1e-12);
+    [...list.children].forEach((li, i) => {
+      li.querySelector('.fill').style.width = `${(list === probBars ? values[i] : values[i] / max) * 100}%`;
+      li.querySelector('.num').textContent = format(values[i]);
+      li.classList.toggle('is-top', i === top);
+    });
+  }
+  buildBars(probBars, [...Array(10).keys()].map(String));
+  buildBars($('gradBars'), [...Array(10).keys()].map(k => `class ${k}`));
+
+  function showPrediction(p, live) {
+    probBars.classList.toggle('is-stale', !p);
+    if (!p) {
+      $('predDigit').textContent = '?'; $('predTitle').textContent = 'No prediction yet'; $('predSub').textContent = 'Draw a digit, then press Predict.';
+      fillBars(probBars, new Array(10).fill(0), () => '', -1);
+      return;
+    }
+    const top = argMax(p);
+    fillBars(probBars, p, v => `${(v * 100).toFixed(1)}%`, top);
+    $('predDigit').textContent = top;
+    $('predTitle').textContent = `Looks like a ${top}`;
+    $('predSub').textContent = `${(p[top] * 100).toFixed(1)}% softmax probability${live ? ', updated as you draw' : ''}.`;
+  }
+
+  function predict() {
+    if (!net) { setStatus('drawStatus', 'warn', 'The network is still warming up. Try again in a moment.'); return; }
+    if (!hasDrawing()) { setStatus('drawStatus', 'warn', 'The pad is empty. Draw a digit first.'); return; }
+    const x = currentInput();
+    let p = net.predictProbs(x);
+    const guess = argMax(p);
+    // Auto-correct only ever teaches a label the visitor actually picked for this drawing.
+    if ($('autoCorrect').checked && label !== null && guess !== label && !training) {
+      teachSample({ x, y: label }, Number($('teachSteps').value));
+      p = net.predictProbs(x);
+      setStatus('drawStatus', 'done', `It guessed ${guess}, you said ${label}: taught ${$('teachSteps').value} SGD ${$('teachSteps').value === '1' ? 'step' : 'steps'}. It now says ${argMax(p)}.`);
+    } else {
+      setStatus('drawStatus', 'done', label === null ? `Prediction: ${guess}. Pick the true label below to add or teach this drawing.` : `Prediction: ${guess}${guess === label ? ', which matches your label.' : '.'}`);
+    }
+    showPrediction(p);
+    renderViz();
+  }
+  $('predict').addEventListener('click', predict);
+
+  /* ----------------------------------------------------------------- Labels */
+  const labelSeg = $('labelSeg');
+  for (let d = 0; d < 10; d++) {
+    const b = document.createElement('button');
+    b.type = 'button'; b.textContent = d; b.setAttribute('aria-pressed', 'false'); b.setAttribute('aria-label', `This drawing is a ${d}`);
+    b.addEventListener('click', () => setLabel(label === d ? null : d));
+    labelSeg.append(b);
+  }
+  function setLabel(value) {
+    label = value;
+    [...labelSeg.children].forEach((b, d) => b.setAttribute('aria-pressed', String(d === value)));
+    $('addLabel').textContent = value === null ? 'Add to training set' : `Add as a ${value}`;
+    syncActions();
+  }
+  function syncActions() {
+    const ready = hasDrawing() && label !== null;
+    $('add').disabled = !ready;
+    $('teach').disabled = !ready || training || !net;
+    $('predict').disabled = !net;
+    $('train').disabled = training;
+    $('stop').disabled = !training;
+    $('rebuild').disabled = $('hidden').disabled = training;
+    [...$('initSeg').children].forEach(b => { b.disabled = training; });
+    $('removeLast').disabled = $('clearData').disabled = samples.length === 0;
+  }
+
+  /* --------------------------------------------------------------- Data set */
+  const counts = $('counts');
+  for (let d = 0; d < 10; d++) { const li = document.createElement('li'); li.innerHTML = `<span class="d">${d}</span><span class="n">0</span>`; counts.append(li); }
+  function renderData(flash) {
+    const per = new Array(10).fill(0); samples.forEach(s => per[s.y]++);
+    [...counts.children].forEach((li, d) => {
+      li.querySelector('.n').textContent = per[d];
+      li.classList.toggle('has', per[d] > 0);
+      li.classList.remove('is-new');
+      if (d === flash) { void li.offsetWidth; li.classList.add('is-new'); }
+    });
+    const thumbs = $('thumbs'); thumbs.textContent = ''; thumbs.hidden = samples.length === 0;
+    samples.slice(-12).forEach(s => { const li = document.createElement('li'), c = document.createElement('canvas'); c.width = c.height = 28; paintGrey(c, s.x); li.append(c, String(s.y)); thumbs.append(li); });
+    $('dataHint').textContent = samples.length ? `${samples.length} ${samples.length === 1 ? 'drawing' : 'drawings'} of your own. Press Train network to learn from ${samples.length === 1 ? 'it' : 'them'}.` : 'No drawings yet. Draw a digit, pick its label and press Add to training set.';
+    $('statSamples').textContent = samples.length;
+    $('statSamplesNote').textContent = $('useSynth').checked ? 'yours, plus 150 synthetic' : 'yours only';
+    syncActions();
+  }
+  $('add').addEventListener('click', () => {
+    samples.push({ x: currentInput(), y: label });
+    renderData(label);
+    setStatus('drawStatus', 'done', `Added as a ${label}. You have ${samples.length} ${samples.length === 1 ? 'drawing' : 'drawings'}. Clear the pad and draw the next one.`);
+  });
+  $('removeLast').addEventListener('click', () => { const s = samples.pop(); renderData(); if (s) setStatus('drawStatus', 'idle', `Removed the last drawing (a ${s.y}).`); });
+  $('clearData').addEventListener('click', () => { samples = []; renderData(); setStatus('drawStatus', 'idle', 'Your training set is empty again.'); });
+  $('useSynth').addEventListener('change', () => renderData());
+
+  /* --------------------------------------------------------------- Training */
+  function setStatus(id, state, text) { SGLab.status($(id), state, text); }
+  const pause = () => new Promise(resolve => setTimeout(resolve, 0));
+  function shuffle(a) { for (let i = a.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [a[i], a[j]] = [a[j], a[i]]; } }
+  const hiddenUnits = () => Number($('hidden').value);
+  const rate = () => RATES[Number($('lr').value)];
+
+  // Same loop as the original: fresh weights, optional shuffle, mini-batches, SGD. It yields to the
+  // page between batches so drawing stays responsive, and a newer job or Stop ends it cleanly.
+  async function train(data, options, note) {
+    const mine = ++job;
+    training = true; syncActions();
+    net = new MLP(INPUT, hiddenUnits(), CLASSES, init, options.lr);
+    history = []; gradSource = null; hoverPoint = -1;
+    drawLoss(); renderViz();
+    const order = [...data.keys()];
+    let slice = performance.now();
+    for (let ep = 0; ep < options.epochs; ep++) {
+      if (options.shuffle) shuffle(order);
+      let lossSum = 0, seen = 0, right = 0;
+      for (let at = 0; at < order.length; at += options.batch) {
+        const idx = order.slice(at, at + options.batch), X = zeros(idx.length, INPUT), y = [];
+        idx.forEach((k, i) => { y.push(data[k].y); X.a.set(data[k].x, i * INPUT); });
+        net.forward(X);
+        lossSum += net.loss(y) * idx.length; seen += idx.length;
+        net.probs.forEach((p, i) => { if (argMax(p) === y[i]) right++; });
+        const last = ep === options.epochs - 1;
+        net.backward(y, last);
+        if (last) gradSource = { kind: 'batch', n: idx.length };
+        if (performance.now() - slice > 14) { await pause(); slice = performance.now(); if (mine !== job) return; }
+      }
+      history.push({ kind: 'epoch', n: ep + 1, loss: lossSum / seen });
+      $('statLoss').textContent = (lossSum / seen).toFixed(3);
+      $('statAcc').textContent = `${Math.round(right / seen * 100)}%`; $('statAccNote').textContent = 'last epoch';
+      $('statEpochs').textContent = `${ep + 1} / ${options.epochs}`; $('statEpochsNote').textContent = note;
+      setStatus('trainStatus', 'running', `Epoch ${ep + 1} of ${options.epochs} on ${data.length} samples. Loss ${(lossSum / seen).toFixed(3)}.`);
+      drawLoss();
+      await pause(); slice = performance.now();
+      if (mine !== job) return;
+    }
+    training = false;
+    setStatus('trainStatus', 'done', `${note === 'warm start' ? 'Warm start finished' : 'Training finished'}: ${options.epochs} ${options.epochs === 1 ? 'epoch' : 'epochs'} on ${data.length} samples. Draw a digit to test it.`);
+    afterWeightsChange();
+  }
+  function afterWeightsChange() {
+    syncActions();
+    if (hasDrawing() && net) showPrediction(net.predictProbs(currentInput()), true);
+    renderViz();
+  }
+  function warmStart() {
+    setStatus('trainStatus', 'running', 'Warm start: training on 150 synthetic digits.');
+    return train(synth, { ...WARM, shuffle: true }, 'warm start');
+  }
+  $('train').addEventListener('click', () => {
+    const data = $('useSynth').checked ? synth.concat(samples) : samples.slice();
+    if (data.length < 5) { setStatus('trainStatus', 'warn', `Only ${data.length} ${data.length === 1 ? 'sample' : 'samples'} to learn from. Add at least 5 drawings, or include the synthetic digits.`); return; }
+    train(data, { lr: rate(), batch: BATCHES[Number($('batch').value)], epochs: Number($('epochs').value), shuffle: $('shuffle').checked }, 'your run');
+  });
+  $('stop').addEventListener('click', () => {
+    job++; training = false;
+    $('statEpochsNote').textContent = 'stopped';
+    setStatus('trainStatus', 'warn', `Stopped after ${history.filter(h => h.kind === 'epoch').length} completed epoch(s). The weights keep what they learned so far.`);
+    afterWeightsChange();
+  });
+  $('rebuild').addEventListener('click', warmStart);
+
+  // One SGD update per step on a single drawing, exactly like the original "teach".
+  function teachSample(sample, steps) {
+    const X = zeros(1, INPUT); X.a.set(sample.x, 0);
+    const taught = history.filter(h => h.kind === 'teach').length;
+    for (let s = 0; s < steps; s++) { net.forward(X); history.push({ kind: 'teach', n: taught + s + 1, loss: net.loss([sample.y]) }); net.backward([sample.y], true); }
+    gradSource = { kind: 'teach', x: sample.x, y: sample.y };
+    $('statLoss').textContent = history[history.length - 1].loss.toFixed(3);
+    drawLoss();
+  }
+  $('teach').addEventListener('click', () => {
+    const x = currentInput(), steps = Number($('teachSteps').value), before = argMax(net.predictProbs(x));
+    teachSample({ x, y: label }, steps);
+    const p = net.predictProbs(x);
+    showPrediction(p); renderViz();
+    setStatus('drawStatus', 'done', `Taught ${steps} SGD ${steps === 1 ? 'step' : 'steps'} toward ${label}. Before: ${before}. Now: ${argMax(p)} at ${(p[argMax(p)] * 100).toFixed(1)}%.`);
+  });
+
+  /* --------------------------------------------------------------- Controls */
+  function paramCount() { const h = hiddenUnits(); return INPUT * h + h + h * CLASSES + CLASSES; }
+  $('hidden').addEventListener('input', () => { $('hiddenOut').textContent = hiddenUnits(); $('archHidden').textContent = `${hiddenUnits()} ReLU`; $('paramCount').textContent = paramCount().toLocaleString('en'); });
+  $('hidden').addEventListener('change', warmStart);
+  [...$('initSeg').children].forEach(b => b.addEventListener('click', () => {
+    if (init === b.dataset.init) return;
+    init = b.dataset.init;
+    [...$('initSeg').children].forEach(other => other.setAttribute('aria-pressed', String(other === b)));
+    warmStart();
+  }));
+  $('lr').addEventListener('input', () => { $('lrOut').textContent = rate(); if (net) net.lr = rate(); });
+  $('batch').addEventListener('input', () => { $('batchOut').textContent = BATCHES[Number($('batch').value)]; });
+  $('epochs').addEventListener('input', () => { $('epochsOut').textContent = $('epochs').value; });
+  $('teachSteps').addEventListener('input', () => { $('teachStepsOut').textContent = $('teachSteps').value; });
+
+  /* ------------------------------------------------------------- Loss chart */
+  const LW = 720, LH = 250, M = { l: 52, r: 18, t: 16, b: 34 };
+  const lossView = SGLab.fitCanvas($('lossCanvas'), LW, LH, () => drawLoss());
+  const xAt = i => M.l + (history.length < 2 ? .5 : i / (history.length - 1)) * (LW - M.l - M.r);
+  // Axis tops that divide into four round steps.
+  function lossTop() { const max = Math.max(...history.map(h => h.loss)); return max <= 1 ? 1 : max <= 2 ? 2 : Math.ceil(max / 2) * 2; }
+  function drawLoss() {
+    $('lossEmpty').hidden = history.length > 0;
+    lossView.begin();
+    if (!history.length) return;
+    const ctx = lossView.ctx, px = lossView.px, top = lossTop(), yAt = v => M.t + (1 - Math.min(v, top) / top) * (LH - M.t - M.b);
+    ctx.font = `${px(11)}px ${MONO}`; ctx.textBaseline = 'middle'; ctx.textAlign = 'right'; ctx.lineWidth = px(1);
+    for (let k = 0; k <= 4; k++) {
+      const v = top * k / 4, y = yAt(v);
+      ctx.strokeStyle = k ? SGLab.grid() : SGLab.axis(); ctx.beginPath(); ctx.moveTo(M.l, y); ctx.lineTo(LW - M.r, y); ctx.stroke();
+      ctx.fillStyle = SGLab.muted(); ctx.fillText(v.toFixed(2), M.l - px(8), y);
+    }
+    // Where epochs end and single-drawing teach steps begin.
+    const firstTeach = history.findIndex(h => h.kind === 'teach');
+    ctx.textAlign = 'center'; ctx.textBaseline = 'top'; ctx.fillStyle = SGLab.muted();
+    if (firstTeach > 0) {
+      const x = (xAt(firstTeach - 1) + xAt(firstTeach)) / 2;
+      ctx.strokeStyle = SGLab.axis(); ctx.beginPath(); ctx.moveTo(x, M.t); ctx.lineTo(x, LH - M.b); ctx.stroke();
+      ctx.fillText('epochs', (M.l + x) / 2, LH - M.b + px(9)); ctx.fillText('teach steps', (x + LW - M.r) / 2, LH - M.b + px(9));
+    } else ctx.fillText(firstTeach === 0 ? 'teach steps' : 'epochs', (M.l + LW - M.r) / 2, LH - M.b + px(9));
+    ctx.strokeStyle = SGLab.color(0); ctx.lineWidth = px(2); ctx.lineJoin = 'round'; ctx.beginPath();
+    history.forEach((h, i) => (i ? ctx.lineTo(xAt(i), yAt(h.loss)) : ctx.moveTo(xAt(i), yAt(h.loss))));
+    ctx.stroke();
+    if (history.length <= 60) history.forEach((h, i) => SGLab.marker(ctx, 0, xAt(i), yAt(h.loss), px(3.5), { shape: h.kind === 'teach' ? 'square' : 'circle', ringWidth: px(1.5) }));
+    if (hoverPoint >= 0 && history[hoverPoint]) {
+      const x = xAt(hoverPoint), y = yAt(history[hoverPoint].loss);
+      ctx.strokeStyle = SGLab.faint(); ctx.lineWidth = px(1); ctx.beginPath(); ctx.moveTo(x, M.t); ctx.lineTo(x, LH - M.b); ctx.stroke();
+      ctx.strokeStyle = SGLab.ink(); ctx.lineWidth = px(2); ctx.beginPath(); ctx.arc(x, y, px(6), 0, Math.PI * 2); ctx.stroke();
+    }
+  }
+  $('lossCanvas').addEventListener('pointermove', event => {
+    if (!history.length) return;
+    const p = lossView.toLogical(event);
+    let best = 0; history.forEach((_, i) => { if (Math.abs(xAt(i) - p.x) < Math.abs(xAt(best) - p.x)) best = i; });
+    if (best !== hoverPoint) { hoverPoint = best; drawLoss(); }
+    const h = history[best];
+    SGLab.tooltip.show(event.clientX, event.clientY, `<b>${h.kind === 'epoch' ? 'Epoch' : 'Teach step'} ${h.n}</b><div class="tip-muted">cross-entropy loss ${h.loss.toFixed(4)}</div>`);
+  });
+  $('lossCanvas').addEventListener('pointerleave', () => { hoverPoint = -1; SGLab.tooltip.hide(); drawLoss(); });
+
+  /* ---------------------------------------------------------- Visualization */
+  const EXPLAIN = {
+    hidden: 'Each tile is one hidden ReLU unit and shows how strongly it fires for the input on the left. Units at zero were switched off by the ReLU.',
+    w1: 'Each tile is the 28 × 28 weight pattern one hidden unit looks for. Red pixels push the unit up, blue pixels push it down, grey has no say.',
+    back: 'W1 multiplied by W2 folds the two layers into one 28 × 28 template per class: red pixels vote for the digit, blue pixels vote against it.',
+    gw1: 'How strongly the last SGD step pulled on each input weight of a hidden unit. Bright pixels are where that step changed the unit most.',
+    gw2: 'The size of the last gradient for each output class, summed over the hidden units. The classes the step argued about most stand out.',
+  };
+  function heat(canvas, values, signed) {
+    const c = canvas.getContext('2d'), img = c.createImageData(28, 28);
+    let scale = 1e-12; for (const v of values) scale = Math.max(scale, Math.abs(v));
+    for (let i = 0; i < INPUT; i++) { const rgb = signed ? SGLab.divergingRGB(values[i] / scale) : SGLab.rampRGB(values[i] / scale); img.data.set([rgb[0], rgb[1], rgb[2], 255], i * 4); }
+    c.putImageData(img, 0, 0);
+  }
+  function tile(values, caption, signed) {
+    const f = document.createElement('figure'), c = document.createElement('canvas'); f.className = 'tile'; c.width = c.height = 28; c.setAttribute('aria-hidden', 'true');
+    heat(c, values, signed); f.append(c);
+    if (caption) { const cap = document.createElement('figcaption'); cap.textContent = caption; f.append(cap); }
+    return f;
+  }
+  function setScale(kind, low, mid, high) {
+    $('vizScale').hidden = !kind;
+    if (!kind) return;
+    $('vizScaleBar').style.background = kind === 'diverging' ? SGLab.divergingCSS : SGLab.rampCSS;
+    $('scaleLow').textContent = low; $('scaleMid').textContent = mid; $('scaleHigh').textContent = high;
+  }
+  function setContext(x, title, detail) {
+    $('vizThumb').hidden = !x;
+    if (x) paintGrey($('vizThumb'), x);
+    $('vizCaption').innerHTML = `<b>${SGLab.escapeHTML(title)}</b>${SGLab.escapeHTML(detail)}`;
+  }
+  function renderViz() {
+    const tiles = $('tiles'), bars = $('gradBars'), empty = $('vizEmpty');
+    tiles.textContent = ''; tiles.className = 'tiles'; tiles.hidden = false; bars.hidden = true; empty.hidden = true;
+    $('vizExplain').textContent = EXPLAIN[tab];
+    if (!net) { tiles.hidden = true; empty.hidden = false; empty.textContent = 'The network is warming up.'; setScale(null); setContext(null, 'Warming up', ''); return; }
+    const W1col = h => { const w = new Float32Array(INPUT); for (let i = 0; i < INPUT; i++) w[i] = net.W1.a[i * net.hidden + h]; return w; };
+    if (tab === 'hidden') {
+      const mine = hasDrawing(), sample = synth[3 * 15], x = mine ? currentInput() : sample.x, H = net.hiddenFor(x), shown = Math.min(64, net.hidden);
+      let max = 1e-9; for (let i = 0; i < shown; i++) max = Math.max(max, H[i]);
+      tiles.classList.add('cells'); tiles.style.setProperty('--tile', '46px');
+      for (let i = 0; i < shown; i++) {
+        const cell = document.createElement('div'), t = H[i] / max, rgb = SGLab.rampRGB(t);
+        cell.className = 'cell' + (t > .62 ? ' on-light' : ''); cell.style.background = `rgb(${rgb.join(',')})`;
+        cell.textContent = H[i].toFixed(1); cell.title = `hidden unit ${i}: activation ${H[i].toFixed(3)}`;
+        tiles.append(cell);
+      }
+      setScale('ramp', '0 (off)', 'activation', max.toFixed(2));
+      setContext(x, mine ? 'Your drawing' : `A synthetic ${sample.y}`, `${mine ? 'These activations update as you draw.' : 'Draw on the pad to see your own.'} Showing ${shown} of ${net.hidden} units.`);
+    } else if (tab === 'w1' || tab === 'gw1') {
+      const grads = tab === 'gw1';
+      if (grads && !net.lastGradW1) { tiles.hidden = true; empty.hidden = false; empty.textContent = 'Gradients appear after the first SGD step.'; setScale(null); setContext(null, 'No gradient yet', ''); return; }
+      tiles.style.setProperty('--tile', '72px');
+      const shown = Math.min(32, net.hidden);
+      for (let h = 0; h < shown; h++) {
+        const w = grads ? new Float32Array(INPUT) : W1col(h);
+        if (grads) for (let i = 0; i < INPUT; i++) w[i] = Math.abs(net.lastGradW1.a[i * net.hidden + h]);
+        tiles.append(tile(w, `h${h}`, !grads));
+      }
+      if (grads) setScale('ramp', '0', '|∂L/∂W1|', 'largest in the unit'); else setScale('diverging', 'most negative', '0', 'most positive');
+      if (grads) setContext(gradSource && gradSource.x, gradSource && gradSource.kind === 'teach' ? `Last teach step, toward ${gradSource.y}` : 'Last mini-batch of training', ` Showing ${shown} of ${net.hidden} units, each scaled to its own maximum.`);
+      else setContext(null, 'Weights only', ` This view does not depend on the input. Showing ${shown} of ${net.hidden} units, each scaled to its own range.`);
+    } else if (tab === 'back') {
+      tiles.classList.add('templates');
+      for (let k = 0; k < CLASSES; k++) {
+        const back = new Float32Array(INPUT);
+        for (let i = 0; i < INPUT; i++) { let s = 0; for (let h = 0; h < net.hidden; h++) s += net.W1.a[i * net.hidden + h] * net.W2.a[h * CLASSES + k]; back[i] = s; }
+        tiles.append(tile(back, `class ${k}`, true));
+      }
+      setScale('diverging', 'votes against', '0', 'votes for');
+      setContext(null, 'Weights only', ' One template per digit, each scaled to its own range.');
+    } else {
+      tiles.hidden = true;
+      if (!net.lastGradW2) { empty.hidden = false; empty.textContent = 'Gradients appear after the first SGD step.'; setScale(null); setContext(null, 'No gradient yet', ''); return; }
+      bars.hidden = false;
+      const sums = []; for (let k = 0; k < CLASSES; k++) { let s = 0; for (let h = 0; h < net.hidden; h++) s += Math.abs(net.lastGradW2.a[h * CLASSES + k]); sums.push(s); }
+      fillBars(bars, sums, v => v.toFixed(3), argMax(sums));
+      setScale(null);
+      setContext(gradSource && gradSource.x, gradSource && gradSource.kind === 'teach' ? `Last teach step, toward ${gradSource.y}` : 'Last mini-batch of training', ' Bars are relative to the largest class.');
+    }
+    SGLab.resize();
+  }
+  const tabs = [...$('vizTabs').children];
+  function selectTab(button, focus) {
+    tab = button.dataset.tab;
+    tabs.forEach(t => { const on = t === button; t.setAttribute('aria-selected', String(on)); t.tabIndex = on ? 0 : -1; });
+    $('vizPanel').setAttribute('aria-labelledby', button.id);
+    if (focus) button.focus();
+    renderViz();
+  }
+  tabs.forEach((button, i) => {
+    button.addEventListener('click', () => selectTab(button));
+    button.addEventListener('keydown', event => {
+      const step = event.key === 'ArrowRight' ? 1 : event.key === 'ArrowLeft' ? -1 : 0;
+      if (step) { event.preventDefault(); selectTab(tabs[(i + step + tabs.length) % tabs.length], true); }
+    });
+  });
+
+  SGLab.onTheme(() => { drawPad(); drawLoss(); });
+  $('paramCount').textContent = paramCount().toLocaleString('en');
+  $('lrOut').textContent = rate();
+  $('batchOut').textContent = BATCHES[Number($('batch').value)];
+  renderData();
+  drawingChanged();
+  warmStart();
 })();
 </script>
 </body>

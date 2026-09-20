@@ -1,787 +1,1011 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="en">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>PCA Dimensionality Reduction - Interactive Visualization</title>
-    <style>
-        * {
-            margin: 0;
-            padding: 0;
-            box-sizing: border-box;
-        }
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>PCA dimensionality reduction playground | Srinjoy Ghosh</title>
+<link rel="icon" type="image/svg+xml" href="../assets/favicon.svg">
+<link rel="stylesheet" href="../assets/lab.css">
+<script src="../assets/lab-bridge.js"></script>
+<style>
+  /* Two plots share one panel: side by side when the stage has room, stacked when it does not. */
+  .lab-stage{container-type:inline-size}
+  .views{display:grid;grid-template-columns:minmax(0,1fr);gap:12px;padding:10px 12px 0}
+  .view{display:grid;grid-template-rows:auto 1fr;gap:8px;min-width:0;margin:0}
+  .view .plot{margin:0}
+  .view-head{display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:6px 12px;min-height:40px;padding-left:8px}
+  .view-head h3{font-size:13.5px;font-weight:500}
+  .view-head small{margin-left:10px;font:500 11.5px/1 var(--mono);letter-spacing:.06em;color:var(--faint)}
+  .view-head .seg{flex:none}
+  .seg>button:disabled{opacity:.4;cursor:not-allowed}
+  .seg>button:disabled:hover{color:var(--muted)}
+  #plot3d{cursor:grab;touch-action:pan-y;-webkit-user-select:none;user-select:none}
+  #plot3d.is-dragging{cursor:grabbing}
+  #plot2d{cursor:crosshair}
+  .plot-empty{align-content:center;gap:4px;font-size:13px;line-height:1.5}
+  .plot-empty b{font-size:14.5px;font-weight:500;color:var(--muted)}
+  .key{padding:12px 20px 14px}
+  .legend{gap:8px 22px}
+  .legend .count{font:12px var(--mono);color:var(--faint)}
+  #run{min-width:152px}
+  /* Room for two lines, so the panel does not change height while a run narrates itself. */
+  #status{min-height:64px}
 
-        body {
-            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            min-height: 100vh;
-            padding: 20px;
-            color: #333;
-        }
+  /* What the decomposition found: one card per idea. */
+  .cards{display:grid;grid-template-columns:minmax(0,1fr);gap:16px}
+  .cards>.group{align-content:start}
+  .bars{display:grid;gap:14px;margin:0;padding:0;list-style:none}
+  .bars li{display:grid;grid-template-columns:auto minmax(0,1fr) auto;align-items:center;gap:6px 10px}
+  .bar-name{font:500 12.5px/1 var(--mono);color:var(--ink)}
+  /* One series, so one colour. Bars grow from a square baseline to a rounded data end. */
+  .bar-track{height:10px;border-radius:0 4px 4px 0;background:rgba(255,255,255,.07);overflow:hidden}
+  .bar-fill{display:block;width:0;height:100%;border-radius:0 4px 4px 0;background:var(--s1);transition:width .7s var(--ease)}
+  .bar-value{min-width:48px;text-align:right;font:500 13px/1 var(--mono);color:var(--ink)}
+  .bar-note{grid-column:2/-1;display:flex;justify-content:space-between;gap:10px;font-size:12px;color:var(--faint)}
+  .matrix{table-layout:fixed;border-collapse:separate;border-spacing:4px;margin:-4px;width:calc(100% + 8px);font:12.5px/1.2 var(--mono)}
+  .matrix th,.matrix td{padding:0;border:0;text-align:center}
+  .matrix th{position:static;font:500 11.5px/1.2 var(--mono);letter-spacing:.04em;text-transform:none;color:var(--muted);background:none}
+  .matrix thead th{padding-bottom:2px}
+  .matrix thead td,.matrix tbody th{width:36px}
+  .matrix tbody th{text-align:left}
+  .matrix tbody td,.matrix tbody tr:hover td{padding:10px 4px 9px;border-radius:9px;color:var(--ink);background:rgba(255,255,255,.035);box-shadow:inset 0 0 0 1px var(--line)}
+  /* A centred bar under each number: direction and hue give the sign, length gives the size. */
+  .mini{display:block;position:relative;height:3px;margin:8px 5px 0;border-radius:2px;background:rgba(255,255,255,.08)}
+  .mini::before{content:'';position:absolute;top:0;bottom:0;left:50%;width:calc(var(--v,0)*50%);border-radius:0 2px 2px 0;background:var(--c,transparent)}
+  .mini.neg::before{left:auto;right:50%;border-radius:2px 0 0 2px}
+  .mini::after{content:'';position:absolute;top:-2px;bottom:-2px;left:calc(50% - .5px);width:1px;background:var(--axis)}
 
-        .container {
-            max-width: 1600px;
-            margin: 0 auto;
-            background: white;
-            border-radius: 20px;
-            box-shadow: 0 20px 60px rgba(0,0,0,0.3);
-            overflow: hidden;
-        }
-
-        .header {
-            background: linear-gradient(135deg, #2d3748 0%, #1a202c 100%);
-            color: white;
-            padding: 30px;
-            text-align: center;
-        }
-
-        .header h1 {
-            font-size: 2.5em;
-            margin-bottom: 10px;
-            font-weight: 700;
-        }
-
-        .header p {
-            font-size: 1.1em;
-            opacity: 0.9;
-        }
-
-        .main-content {
-            display: grid;
-            grid-template-columns: 350px 1fr;
-            gap: 20px;
-            padding: 20px;
-        }
-
-        .controls {
-            background: #f7fafc;
-            padding: 25px;
-            border-radius: 15px;
-            height: fit-content;
-        }
-
-        .control-group {
-            margin-bottom: 25px;
-        }
-
-        .control-group label {
-            display: block;
-            font-weight: 600;
-            margin-bottom: 8px;
-            color: #2d3748;
-            font-size: 0.95em;
-        }
-
-        .slider-container {
-            display: flex;
-            align-items: center;
-            gap: 10px;
-        }
-
-        input[type="range"] {
-            flex: 1;
-            height: 6px;
-            border-radius: 5px;
-            background: #cbd5e0;
-            outline: none;
-            -webkit-appearance: none;
-        }
-
-        input[type="range"]::-webkit-slider-thumb {
-            -webkit-appearance: none;
-            appearance: none;
-            width: 18px;
-            height: 18px;
-            border-radius: 50%;
-            background: #667eea;
-            cursor: pointer;
-            transition: all 0.2s;
-        }
-
-        input[type="range"]::-webkit-slider-thumb:hover {
-            background: #5568d3;
-            transform: scale(1.2);
-        }
-
-        input[type="range"]::-moz-range-thumb {
-            width: 18px;
-            height: 18px;
-            border-radius: 50%;
-            background: #667eea;
-            cursor: pointer;
-            border: none;
-        }
-
-        .value-display {
-            min-width: 40px;
-            text-align: right;
-            font-weight: 600;
-            color: #667eea;
-        }
-
-        button {
-            width: 100%;
-            padding: 14px;
-            border: none;
-            border-radius: 10px;
-            font-size: 1em;
-            font-weight: 600;
-            cursor: pointer;
-            transition: all 0.3s;
-            margin-bottom: 10px;
-        }
-
-        .btn-primary {
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            color: white;
-        }
-
-        .btn-primary:hover {
-            transform: translateY(-2px);
-            box-shadow: 0 5px 15px rgba(102, 126, 234, 0.4);
-        }
-
-        .btn-secondary {
-            background: #e2e8f0;
-            color: #2d3748;
-        }
-
-        .btn-secondary:hover {
-            background: #cbd5e0;
-        }
-
-        .stats {
-            background: white;
-            padding: 15px;
-            border-radius: 10px;
-            margin-top: 20px;
-            border: 2px solid #e2e8f0;
-        }
-
-        .stats h3 {
-            margin-bottom: 12px;
-            color: #2d3748;
-            font-size: 1.1em;
-        }
-
-        .stat-row {
-            display: flex;
-            justify-content: space-between;
-            padding: 8px 0;
-            border-bottom: 1px solid #e2e8f0;
-            font-size: 0.9em;
-        }
-
-        .stat-row:last-child {
-            border-bottom: none;
-        }
-
-        .stat-label {
-            color: #4a5568;
-        }
-
-        .stat-value {
-            font-weight: 600;
-            color: #667eea;
-        }
-
-        .visualizations {
-            display: grid;
-            grid-template-columns: 1fr 1fr;
-            gap: 20px;
-        }
-
-        .viz-container {
-            background: #f7fafc;
-            border-radius: 15px;
-            padding: 20px;
-            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
-        }
-
-        .viz-container h2 {
-            margin-bottom: 15px;
-            color: #2d3748;
-            font-size: 1.3em;
-            text-align: center;
-        }
-
-        canvas {
-            border-radius: 10px;
-            display: block;
-            margin: 0 auto;
-        }
-
-        .variance-bars {
-            margin-top: 15px;
-        }
-
-        .variance-bar {
-            margin-bottom: 10px;
-        }
-
-        .variance-label {
-            display: flex;
-            justify-content: space-between;
-            margin-bottom: 5px;
-            font-size: 0.9em;
-            color: #4a5568;
-        }
-
-        .bar-bg {
-            background: #e2e8f0;
-            height: 20px;
-            border-radius: 10px;
-            overflow: hidden;
-        }
-
-        .bar-fill {
-            height: 100%;
-            background: linear-gradient(90deg, #667eea 0%, #764ba2 100%);
-            transition: width 0.5s ease;
-            display: flex;
-            align-items: center;
-            justify-content: flex-end;
-            padding-right: 8px;
-            color: white;
-            font-size: 0.8em;
-            font-weight: 600;
-        }
-
-        .info-box {
-            background: #edf2f7;
-            padding: 15px;
-            border-radius: 10px;
-            margin-top: 15px;
-            border-left: 4px solid #667eea;
-        }
-
-        .info-box p {
-            font-size: 0.9em;
-            line-height: 1.6;
-            color: #4a5568;
-        }
-
-        @media (max-width: 1200px) {
-            .main-content {
-                grid-template-columns: 1fr;
-            }
-
-            .visualizations {
-                grid-template-columns: 1fr;
-            }
-        }
-    </style>
-<link rel="stylesheet" href="../assets/lab-theme.css">
-<script defer src="../assets/lab-bridge.js"></script>
+  @container (min-width:620px){.views{grid-template-columns:repeat(2,minmax(0,1fr))}}
+  @container (min-width:540px){.cards{grid-template-columns:repeat(2,minmax(0,1fr))}.cards>:first-child{grid-column:1/-1}}
+  @container (min-width:800px){.cards{grid-template-columns:minmax(0,1.2fr) minmax(0,1fr) minmax(0,1fr)}.cards>:first-child{grid-column:auto}}
+  @media(max-width:520px){
+    .views{padding:8px 8px 0}
+    .key{padding:12px 16px}
+    #status{min-height:86px}
+  }
+</style>
 </head>
 <body>
-    <div class="container">
-        <div class="header">
-            <h1>🔬 PCA Dimensionality Reduction</h1>
-            <p>Interactive visualization of Principal Component Analysis: 3D → 2D projection</p>
+<div class="lab">
+  <header class="lab-head">
+    <div><a class="lab-back" href="../spaces/pca-dimensionality-reduction/index.html">&larr; Back to portfolio</a><h1>PCA dimensionality reduction</h1></div>
+  </header>
+
+  <div class="lab-app">
+    <aside class="lab-side">
+      <section class="group" aria-labelledby="g-data">
+        <h2 class="group-title" id="g-data">Dataset</h2>
+        <div class="field">
+          <label for="nSlider">Data points (N)</label><output id="nValue" for="nSlider">200</output>
+          <input type="range" id="nSlider" min="50" max="500" step="10" value="200">
         </div>
-
-        <div class="main-content">
-            <div class="controls">
-                <div class="control-group">
-                    <label>Number of Data Points (N)</label>
-                    <div class="slider-container">
-                        <input type="range" id="numPoints" min="50" max="500" value="200" step="10">
-                        <span class="value-display" id="numPointsValue">200</span>
-                    </div>
-                </div>
-
-                <div class="control-group">
-                    <label>Number of Clusters</label>
-                    <div class="slider-container">
-                        <input type="range" id="numClusters" min="1" max="5" value="3" step="1">
-                        <span class="value-display" id="numClustersValue">3</span>
-                    </div>
-                </div>
-
-                <div class="control-group">
-                    <label>Cluster Spread (σ)</label>
-                    <div class="slider-container">
-                        <input type="range" id="spread" min="0.5" max="3" value="1.5" step="0.1">
-                        <span class="value-display" id="spreadValue">1.5</span>
-                    </div>
-                </div>
-
-                <div class="control-group">
-                    <label>3D Rotation Speed</label>
-                    <div class="slider-container">
-                        <input type="range" id="rotationSpeed" min="0" max="2" value="0.5" step="0.1">
-                        <span class="value-display" id="rotationSpeedValue">0.5</span>
-                    </div>
-                </div>
-
-                <button class="btn-primary" onclick="generateNewData()">🎲 Generate New Data</button>
-                <button class="btn-primary" onclick="runPCA()">▶️ Run PCA</button>
-                <button class="btn-secondary" onclick="resetView()">🔄 Reset View</button>
-
-                <div class="stats">
-                    <h3>📊 PCA Statistics</h3>
-                    <div class="stat-row">
-                        <span class="stat-label">Total Points:</span>
-                        <span class="stat-value" id="totalPoints">0</span>
-                    </div>
-                    <div class="stat-row">
-                        <span class="stat-label">Original Dims:</span>
-                        <span class="stat-value">3D</span>
-                    </div>
-                    <div class="stat-row">
-                        <span class="stat-label">Reduced Dims:</span>
-                        <span class="stat-value">2D</span>
-                    </div>
-                    <div class="stat-row">
-                        <span class="stat-label">Variance Retained:</span>
-                        <span class="stat-value" id="varianceRetained">0%</span>
-                    </div>
-                </div>
-
-                <div class="info-box">
-                    <p><strong>How it works:</strong> PCA finds the directions (principal components) of maximum variance in your data. The first PC captures the most variance, the second captures the second-most, and so on. By projecting to the top 2 PCs, we reduce from 3D to 2D while preserving the most information.</p>
-                </div>
-            </div>
-
-            <div class="visualizations">
-                <div class="viz-container">
-                    <h2>Original 3D Data</h2>
-                    <canvas id="canvas3d" width="600" height="500"></canvas>
-                </div>
-
-                <div class="viz-container">
-                    <h2>PCA 2D Projection</h2>
-                    <canvas id="canvas2d" width="600" height="500"></canvas>
-                    
-                    <div class="variance-bars">
-                        <div class="variance-bar">
-                            <div class="variance-label">
-                                <span>PC1 (1st Principal Component)</span>
-                                <span id="pc1Var">0%</span>
-                            </div>
-                            <div class="bar-bg">
-                                <div class="bar-fill" id="pc1Bar" style="width: 0%"></div>
-                            </div>
-                        </div>
-                        <div class="variance-bar">
-                            <div class="variance-label">
-                                <span>PC2 (2nd Principal Component)</span>
-                                <span id="pc2Var">0%</span>
-                            </div>
-                            <div class="bar-bg">
-                                <div class="bar-fill" id="pc2Bar" style="width: 0%"></div>
-                            </div>
-                        </div>
-                        <div class="variance-bar">
-                            <div class="variance-label">
-                                <span>PC3 (3rd Principal Component)</span>
-                                <span id="pc3Var">0%</span>
-                            </div>
-                            <div class="bar-bg">
-                                <div class="bar-fill" id="pc3Bar" style="width: 0%"></div>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-            </div>
+        <div class="field">
+          <label for="kSlider">Clusters</label><output id="kValue" for="kSlider">3</output>
+          <input type="range" id="kSlider" min="1" max="5" step="1" value="3">
         </div>
-    </div>
+        <div class="field">
+          <label for="spreadSlider">Cluster spread</label><output id="spreadValue" for="spreadSlider">1.5</output>
+          <input type="range" id="spreadSlider" min="0.5" max="3" step="0.1" value="1.5">
+          <p class="hint">Points fall uniformly within &plusmn;spread of their cluster centre on every axis. The sliders reshape the current dataset; New data draws fresh centres.</p>
+        </div>
+      </section>
 
-    <script>
-        // Global variables
-        let dataPoints = [];
-        let pcaResult = null;
-        let rotation = 0;
-        let autoRotate = true;
+      <section class="group" aria-labelledby="g-view">
+        <h2 class="group-title" id="g-view">3D view</h2>
+        <div class="field">
+          <label for="speedSlider">Rotation speed</label><output id="speedValue" for="speedSlider">0.5</output>
+          <input type="range" id="speedSlider" min="0" max="2" step="0.1" value="0.5">
+          <p class="hint" id="speedHint">Drag the plot to orbit it. Rotation pauses while the pointer is over the plot.</p>
+        </div>
+      </section>
 
-        // Canvas contexts
-        const canvas3d = document.getElementById('canvas3d');
-        const ctx3d = canvas3d.getContext('2d');
-        const canvas2d = document.getElementById('canvas2d');
-        const ctx2d = canvas2d.getContext('2d');
+      <section class="group" aria-labelledby="g-result">
+        <h2 class="group-title" id="g-result">Result</h2>
+        <div class="stat-grid">
+          <div class="stat"><span class="stat-label">Points</span><span class="stat-value" id="pointCount">0</span></div>
+          <div class="stat"><span class="stat-label">Dimensions</span><span class="stat-value">3 &rarr; 2</span></div>
+          <div class="stat"><span class="stat-label">Variance kept</span><span class="stat-value" id="keptValue">&ndash;</span></div>
+          <div class="stat"><span class="stat-label">Power iterations</span><span class="stat-value" id="iterValue">&ndash;</span></div>
+        </div>
+        <p class="hint">Variance kept is the share of the cloud's total variance that survives the drop from three dimensions to two.</p>
+      </section>
 
-        // Colors for clusters
-        const colors = ['#667eea', '#f6ad55', '#48bb78', '#ed64a6', '#4299e1'];
+      <details class="group" open>
+        <summary><span class="group-title">How it works</span></summary>
+        <p class="explain">PCA looks for the directions along which the data varies most. It <strong>centres</strong> the points on their mean, builds the 3 &times; 3 <strong>covariance matrix</strong>, then runs <strong>power iteration</strong>: multiply a random vector by the matrix and normalise, again and again, until it settles on the dominant eigenvector, PC1. <strong>Deflation</strong> removes that direction so the next pass finds PC2, then PC3. Keeping only the PC1 and PC2 coordinates turns every 3D point into a 2D one while giving up as little variance as possible.</p>
+      </details>
+    </aside>
 
-        // Matrix operations
-        class Matrix {
-            static multiply(a, b) {
-                const result = [];
-                for (let i = 0; i < a.length; i++) {
-                    result[i] = [];
-                    for (let j = 0; j < b[0].length; j++) {
-                        let sum = 0;
-                        for (let k = 0; k < a[0].length; k++) {
-                            sum += a[i][k] * b[k][j];
-                        }
-                        result[i][j] = sum;
-                    }
-                }
-                return result;
-            }
+    <main class="lab-stage">
+      <div class="panel">
+        <div class="panel-head">
+          <h2>From 3D to 2D</h2>
+          <div class="toolbar">
+            <button class="btn" type="button" id="newData"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 7h4l10 10h4m-3-3 3 3-3 3M3 17h4l3-3m4-4 3-3h4m-3-3 3 3-3 3"/></svg>New data</button>
+            <button class="btn btn-primary" type="button" id="run"><svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path id="runIcon" d="M8 5v14l11-7z"/></svg><span id="runLabel">Run PCA</span></button>
+            <button class="btn" type="button" id="match" disabled><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="4" y="4" width="16" height="16" rx="2.5"/><path d="M4 12h16M12 4v16"/></svg>Match 2D view</button>
+            <button class="btn btn-ghost" type="button" id="resetView">Reset view</button>
+          </div>
+        </div>
+        <div class="views">
+          <figure class="view">
+            <figcaption class="view-head">
+              <h3>Original data<small>x &middot; y &middot; z</small></h3>
+              <div class="seg" role="group" aria-label="Points shown in the 3D view">
+                <button type="button" id="showOriginal" aria-pressed="true">Original</button>
+                <button type="button" id="showFlat" aria-pressed="false" disabled>Flattened</button>
+              </div>
+            </figcaption>
+            <div class="plot"><canvas id="plot3d" role="img" aria-label="3D scatter plot of the dataset."></canvas></div>
+          </figure>
+          <figure class="view">
+            <figcaption class="view-head">
+              <h3>PCA projection<small>PC1 &times; PC2</small></h3>
+              <span class="chip" id="keptChip" hidden></span>
+            </figcaption>
+            <div class="plot">
+              <canvas id="plot2d" role="img" aria-label="Projection plot, empty until PCA has run."></canvas>
+              <div class="plot-empty" id="empty2d"><b>No projection yet</b><span>It appears here once PC1 and PC2 are known.</span></div>
+            </div>
+          </figure>
+        </div>
+        <div class="key"><ul class="legend" id="legend" aria-label="Clusters"></ul></div>
+        <div class="statusbar" id="status" role="status" aria-live="polite">Press Run PCA to find the directions of greatest variance.</div>
+      </div>
 
-            static transpose(matrix) {
-                return matrix[0].map((_, i) => matrix.map(row => row[i]));
-            }
+      <div class="cards">
+        <section class="group" aria-labelledby="c-variance">
+          <h2 class="group-title" id="c-variance">Explained variance</h2>
+          <ul class="bars">
+            <li><span class="bar-name">PC1</span><span class="bar-track"><i class="bar-fill" id="bar0"></i></span><span class="bar-value" id="barValue0">&ndash;</span><span class="bar-note"><span id="barNote0">Not found yet</span><span>kept</span></span></li>
+            <li><span class="bar-name">PC2</span><span class="bar-track"><i class="bar-fill" id="bar1"></i></span><span class="bar-value" id="barValue1">&ndash;</span><span class="bar-note"><span id="barNote1">Not found yet</span><span>kept</span></span></li>
+            <li><span class="bar-name">PC3</span><span class="bar-track"><i class="bar-fill" id="bar2"></i></span><span class="bar-value" id="barValue2">&ndash;</span><span class="bar-note"><span id="barNote2">Not found yet</span><span>dropped</span></span></li>
+          </ul>
+          <p class="hint" id="barsNote">Each eigenvalue divided by their sum: the share of the variance that lies along that component.</p>
+        </section>
 
-            static mean(matrix, axis = 0) {
-                if (axis === 0) {
-                    const means = new Array(matrix[0].length).fill(0);
-                    for (let i = 0; i < matrix.length; i++) {
-                        for (let j = 0; j < matrix[0].length; j++) {
-                            means[j] += matrix[i][j];
-                        }
-                    }
-                    return means.map(m => m / matrix.length);
-                }
-            }
+        <section class="group" aria-labelledby="c-cov">
+          <h2 class="group-title" id="c-cov">Covariance matrix</h2>
+          <table class="matrix" id="covTable" aria-labelledby="c-cov"></table>
+          <p class="hint" id="covNote">The diagonal holds the variance of each axis; the other cells show how two axes move together.</p>
+        </section>
 
-            static subtract(matrix, vector) {
-                return matrix.map(row => row.map((val, i) => val - vector[i]));
-            }
+        <section class="group" aria-labelledby="c-axes">
+          <h2 class="group-title" id="c-axes">Principal axes</h2>
+          <table class="matrix" id="axesTable" aria-labelledby="c-axes"></table>
+          <p class="hint">Each row is a unit vector. On the 3D plot the axes are drawn in proportion to the standard deviation along them.</p>
+        </section>
+      </div>
+    </main>
+  </div>
+</div>
 
-            static covariance(centered) {
-                const n = centered.length;
-                const d = centered[0].length;
-                const cov = Array(d).fill(0).map(() => Array(d).fill(0));
-                
-                for (let i = 0; i < d; i++) {
-                    for (let j = 0; j < d; j++) {
-                        let sum = 0;
-                        for (let k = 0; k < n; k++) {
-                            sum += centered[k][i] * centered[k][j];
-                        }
-                        cov[i][j] = sum / (n - 1);
-                    }
-                }
-                return cov;
-            }
+<script>
+(() => {
+  'use strict';
+  const WIDTH = 600, HEIGHT = 500;            // logical size of both plots
+  const MAX_CLUSTERS = 5, MAX_POINTS = 500;
+  const AZ0 = -0.62, EL0 = 0.36;              // resting orbit: a little to the side, a little above
+  const SPIN = 0.6;                           // radians per second at speed 1 (the original's 0.01 rad per 60 Hz frame)
+  const REACH = 184;                          // logical pixels from the centre of the 3D plot to the farthest point
+  const CX = WIDTH / 2, CY = HEIGHT / 2 - 6;
+  const IDENTITY = [[1, 0, 0], [0, 1, 0], [0, 0, 1]];
+  const SANS = 'Geist, system-ui, sans-serif';
+  const MONO = '"Geist Mono", ui-monospace, Consolas, monospace';
+  const $ = id => document.getElementById(id);
 
-            // Power iteration for eigendecomposition
-            static eigenDecomposition(matrix) {
-                const n = matrix.length;
-                const maxIter = 1000;
-                const tol = 1e-10;
-                const eigenvalues = [];
-                const eigenvectors = [];
-                
-                // Create a copy of the matrix
-                let A = matrix.map(row => [...row]);
-                
-                for (let i = 0; i < n; i++) {
-                    // Power iteration
-                    let v = Array(n).fill(0).map(() => Math.random());
-                    let norm = Math.sqrt(v.reduce((sum, val) => sum + val * val, 0));
-                    v = v.map(val => val / norm);
-                    
-                    let eigenvalue = 0;
-                    for (let iter = 0; iter < maxIter; iter++) {
-                        // Av
-                        const Av = A.map(row => 
-                            row.reduce((sum, val, j) => sum + val * v[j], 0)
-                        );
-                        
-                        // Eigenvalue
-                        eigenvalue = v.reduce((sum, val, j) => sum + val * Av[j], 0);
-                        
-                        // Normalize
-                        norm = Math.sqrt(Av.reduce((sum, val) => sum + val * val, 0));
-                        const v_new = Av.map(val => val / norm);
-                        
-                        // Check convergence
-                        const diff = v_new.reduce((sum, val, j) => 
-                            sum + Math.abs(val - v[j]), 0
-                        );
-                        
-                        v = v_new;
-                        
-                        if (diff < tol) break;
-                    }
-                    
-                    eigenvalues.push(eigenvalue);
-                    eigenvectors.push(v);
-                    
-                    // Deflate matrix
-                    for (let j = 0; j < n; j++) {
-                        for (let k = 0; k < n; k++) {
-                            A[j][k] -= eigenvalue * v[j] * v[k];
-                        }
-                    }
-                }
-                
-                // Sort by eigenvalue (descending)
-                const indices = eigenvalues.map((_, i) => i)
-                    .sort((a, b) => eigenvalues[b] - eigenvalues[a]);
-                
-                return {
-                    eigenvalues: indices.map(i => eigenvalues[i]),
-                    eigenvectors: indices.map(i => eigenvectors[i])
-                };
-            }
-        }
+  let N = 200, K = 3, spread = 1.5;
+  let speed = SGLab.reducedMotion ? 0 : 0.5;
+  let seeds = null;          // cluster centres and unit offsets: the sliders reshape them, New data redraws them
+  let points = [];           // {x, y, z, cluster}
+  let rel = [];              // the same points measured from their mean
+  let centre = [0, 0, 0];    // the mean, which the 3D view orbits
+  let radius = 1;            // distance from the mean to the farthest point
+  let counts = [];
+  let pca = null;
+  let phase = 'idle';        // idle | running | done
+  let token = 0;             // bumping it invalidates every pending step of a run
+  // How much of the result the interface may show. A run raises these one step at a time.
+  const reveal = { origin: 0, cov: false, found: [false, false, false], back: [0, 0, 0], plane: 0, unfold: 0, probe: null };
 
-        // PCA implementation
-        function performPCA(data) {
-            // Center the data
-            const means = Matrix.mean(data);
-            const centered = Matrix.subtract(data, means);
-            
-            // Compute covariance matrix
-            const cov = Matrix.covariance(centered);
-            
-            // Eigendecomposition
-            const eigen = Matrix.eigenDecomposition(cov);
-            
-            // Calculate explained variance
-            const totalVariance = eigen.eigenvalues.reduce((a, b) => a + b, 0);
-            const explainedVariance = eigen.eigenvalues.map(ev => ev / totalVariance);
-            
-            // Project onto first 2 principal components
-            const components = Matrix.transpose([eigen.eigenvectors[0], eigen.eigenvectors[1]]);
-            const centeredT = Matrix.transpose(centered);
-            const projected = Matrix.transpose(Matrix.multiply(components, centeredT));
-            
-            return {
-                projected,
-                components: eigen.eigenvectors,
-                eigenvalues: eigen.eigenvalues,
-                explainedVariance,
-                means
-            };
-        }
+  let az = AZ0, el = EL0;    // turntable orbit
+  let frameT = 0;            // 0 = the data's own x, y, z frame, 1 = turned into the PC1, PC2, PC3 frame
+  let flat = false, flatT = 0;
+  let savedSpeed = null;     // rotation speed to restore after Match 2D view paused it
+  let hovered = -1, dragging = false, pointerInside = false, onScreen = true;
+  let lastX = 0, lastY = 0;
+  let spots3 = [], spots2 = [], order = [];
 
-        // Generate random data
-        function generateNewData() {
-            const n = parseInt(document.getElementById('numPoints').value);
-            const numClusters = parseInt(document.getElementById('numClusters').value);
-            const spread = parseFloat(document.getElementById('spread').value);
-            
-            dataPoints = [];
-            
-            for (let c = 0; c < numClusters; c++) {
-                const centerX = (Math.random() - 0.5) * 8;
-                const centerY = (Math.random() - 0.5) * 8;
-                const centerZ = (Math.random() - 0.5) * 8;
-                
-                const pointsPerCluster = Math.floor(n / numClusters);
-                
-                for (let i = 0; i < pointsPerCluster; i++) {
-                    const x = centerX + (Math.random() - 0.5) * spread * 2;
-                    const y = centerY + (Math.random() - 0.5) * spread * 2;
-                    const z = centerZ + (Math.random() - 0.5) * spread * 2;
-                    
-                    dataPoints.push({
-                        x, y, z,
-                        cluster: c,
-                        color: colors[c]
-                    });
-                }
-            }
-            
-            document.getElementById('totalPoints').textContent = dataPoints.length;
-            draw3D();
-            
-            // Auto-run PCA
-            runPCA();
-        }
+  /* ----------------------------------------------------------------- Maths */
+  const dot = (a, b) => a[0] * b[0] + a[1] * b[1] + a[2] * b[2];
+  const cross = (a, b) => [a[1] * b[2] - a[2] * b[1], a[2] * b[0] - a[0] * b[2], a[0] * b[1] - a[1] * b[0]];
+  const unit = a => { const l = Math.hypot(a[0], a[1], a[2]) || 1; return [a[0] / l, a[1] / l, a[2] / l]; };
+  const lerp = (a, b, t) => a + (b - a) * t;
+  const clamp = (v, lo, hi) => Math.min(hi, Math.max(lo, v));
+  const easeInOut = t => (t < .5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2);
+  const easeOut = t => 1 - Math.pow(1 - t, 3);
 
-        // Run PCA
-        function runPCA() {
-            if (dataPoints.length === 0) return;
-            
-            const data = dataPoints.map(p => [p.x, p.y, p.z]);
-            pcaResult = performPCA(data);
-            
-            // Update variance statistics
-            const var1 = (pcaResult.explainedVariance[0] * 100).toFixed(1);
-            const var2 = (pcaResult.explainedVariance[1] * 100).toFixed(1);
-            const var3 = (pcaResult.explainedVariance[2] * 100).toFixed(1);
-            const totalVar = (parseFloat(var1) + parseFloat(var2)).toFixed(1);
-            
-            document.getElementById('pc1Var').textContent = var1 + '%';
-            document.getElementById('pc2Var').textContent = var2 + '%';
-            document.getElementById('pc3Var').textContent = var3 + '%';
-            document.getElementById('varianceRetained').textContent = totalVar + '%';
-            
-            document.getElementById('pc1Bar').style.width = var1 + '%';
-            document.getElementById('pc2Bar').style.width = var2 + '%';
-            document.getElementById('pc3Bar').style.width = var3 + '%';
-            
-            draw2D();
-        }
+  function columnMeans(rows) {
+    const means = new Array(rows[0].length).fill(0);
+    for (let i = 0; i < rows.length; i++) for (let j = 0; j < rows[0].length; j++) means[j] += rows[i][j];
+    return means.map(m => m / rows.length);
+  }
+  const subtract = (rows, vector) => rows.map(row => row.map((value, i) => value - vector[i]));
 
-        // 3D projection to 2D
-        function project3D(x, y, z, angle) {
-            const scale = 40;
-            const distance = 400;
-            
-            // Rotate
-            const cosA = Math.cos(angle);
-            const sinA = Math.sin(angle);
-            const x1 = x * cosA - z * sinA;
-            const z1 = x * sinA + z * cosA;
-            
-            // Project
-            const factor = distance / (distance + z1);
-            const x2d = x1 * factor * scale + canvas3d.width / 2;
-            const y2d = y * factor * scale + canvas3d.height / 2;
-            
-            return { x: x2d, y: y2d, z: z1 };
-        }
+  function covariance(centered) {
+    const n = centered.length, d = centered[0].length;
+    const cov = Array(d).fill(0).map(() => Array(d).fill(0));
+    for (let i = 0; i < d; i++) {
+      for (let j = 0; j < d; j++) {
+        let sum = 0;
+        for (let k = 0; k < n; k++) sum += centered[k][i] * centered[k][j];
+        cov[i][j] = sum / (n - 1);
+      }
+    }
+    return cov;
+  }
 
-        // Draw 3D visualization
-        function draw3D() {
-            ctx3d.fillStyle = '#0b141e';
-            ctx3d.fillRect(0, 0, canvas3d.width, canvas3d.height);
-            
-            // Draw grid
-            ctx3d.strokeStyle = '#253b49';
-            ctx3d.lineWidth = 1;
-            for (let i = -10; i <= 10; i += 2) {
-                const p1 = project3D(i, 0, -10, rotation);
-                const p2 = project3D(i, 0, 10, rotation);
-                ctx3d.beginPath();
-                ctx3d.moveTo(p1.x, p1.y);
-                ctx3d.lineTo(p2.x, p2.y);
-                ctx3d.stroke();
-                
-                const p3 = project3D(-10, 0, i, rotation);
-                const p4 = project3D(10, 0, i, rotation);
-                ctx3d.beginPath();
-                ctx3d.moveTo(p3.x, p3.y);
-                ctx3d.lineTo(p4.x, p4.y);
-                ctx3d.stroke();
-            }
-            
-            // Sort points by z for proper rendering
-            const projected = dataPoints.map(p => ({
-                ...project3D(p.x, p.y, p.z, rotation),
-                color: p.color
-            })).sort((a, b) => a.z - b.z);
-            
-            // Draw points
-            projected.forEach(p => {
-                ctx3d.fillStyle = p.color;
-                ctx3d.beginPath();
-                ctx3d.arc(p.x, p.y, 4, 0, Math.PI * 2);
-                ctx3d.fill();
-            });
-            
-            // Draw axes
-            ctx3d.strokeStyle = '#ff0000';
-            ctx3d.lineWidth = 2;
-            const origin = project3D(0, 0, 0, rotation);
-            const xAxis = project3D(3, 0, 0, rotation);
-            ctx3d.beginPath();
-            ctx3d.moveTo(origin.x, origin.y);
-            ctx3d.lineTo(xAxis.x, xAxis.y);
-            ctx3d.stroke();
-            
-            ctx3d.strokeStyle = '#00ff00';
-            const yAxis = project3D(0, 3, 0, rotation);
-            ctx3d.beginPath();
-            ctx3d.moveTo(origin.x, origin.y);
-            ctx3d.lineTo(yAxis.x, yAxis.y);
-            ctx3d.stroke();
-            
-            ctx3d.strokeStyle = '#0000ff';
-            const zAxis = project3D(0, 0, 3, rotation);
-            ctx3d.beginPath();
-            ctx3d.moveTo(origin.x, origin.y);
-            ctx3d.lineTo(zAxis.x, zAxis.y);
-            ctx3d.stroke();
-        }
+  // Power iteration with deflation. `record` keeps every iterate so a run can replay them.
+  function eigenDecomposition(matrix, record) {
+    const n = matrix.length, maxIter = 1000, tol = 1e-10;
+    const passes = [];
+    const A = matrix.map(row => [...row]);
+    for (let i = 0; i < n; i++) {
+      let v = Array(n).fill(0).map(() => Math.random());
+      let norm = Math.sqrt(v.reduce((sum, val) => sum + val * val, 0));
+      v = v.map(val => val / norm);
+      const trail = record ? [{ v, lambda: null }] : null;
+      let eigenvalue = 0, iterations = 0;
+      for (let iter = 0; iter < maxIter; iter++) {
+        const Av = A.map(row => row.reduce((sum, val, j) => sum + val * v[j], 0));
+        eigenvalue = v.reduce((sum, val, j) => sum + val * Av[j], 0);
+        norm = Math.sqrt(Av.reduce((sum, val) => sum + val * val, 0));
+        if (!(norm > 0)) break;               // nothing left to find: keep the current vector
+        const next = Av.map(val => val / norm);
+        const diff = next.reduce((sum, val, j) => sum + Math.abs(val - v[j]), 0);
+        if (trail) { trail[trail.length - 1].lambda = eigenvalue; trail.push({ v: next, lambda: null }); }
+        v = next;
+        iterations = iter + 1;
+        if (diff < tol) break;
+      }
+      passes.push({ eigenvalue, vector: v, iterations, trail });
+      for (let j = 0; j < n; j++) for (let k = 0; k < n; k++) A[j][k] -= eigenvalue * v[j] * v[k];
+    }
+    const ranked = passes.map((_, i) => i).sort((a, b) => passes[b].eigenvalue - passes[a].eigenvalue);
+    ranked.forEach((index, rank) => { passes[index].rank = rank; });
+    return { passes, ranked };
+  }
 
-        // Draw 2D PCA projection
-        function draw2D() {
-            if (!pcaResult) return;
-            
-            ctx2d.fillStyle = '#0b141e';
-            ctx2d.fillRect(0, 0, canvas2d.width, canvas2d.height);
-            
-            // Draw grid
-            ctx2d.strokeStyle = '#253b49';
-            ctx2d.lineWidth = 1;
-            for (let i = -10; i <= 10; i++) {
-                ctx2d.beginPath();
-                ctx2d.moveTo(canvas2d.width / 2 + i * 40, 0);
-                ctx2d.lineTo(canvas2d.width / 2 + i * 40, canvas2d.height);
-                ctx2d.stroke();
-                
-                ctx2d.beginPath();
-                ctx2d.moveTo(0, canvas2d.height / 2 + i * 40);
-                ctx2d.lineTo(canvas2d.width, canvas2d.height / 2 + i * 40);
-                ctx2d.stroke();
-            }
-            
-            // Draw axes
-            ctx2d.strokeStyle = '#9dbab6';
-            ctx2d.lineWidth = 2;
-            ctx2d.beginPath();
-            ctx2d.moveTo(canvas2d.width / 2, 0);
-            ctx2d.lineTo(canvas2d.width / 2, canvas2d.height);
-            ctx2d.stroke();
-            ctx2d.beginPath();
-            ctx2d.moveTo(0, canvas2d.height / 2);
-            ctx2d.lineTo(canvas2d.width, canvas2d.height / 2);
-            ctx2d.stroke();
-            
-            // Draw axis labels
-            ctx2d.fillStyle = '#b5cec8';
-            ctx2d.font = 'bold 14px Arial';
-            ctx2d.fillText('PC1', canvas2d.width - 40, canvas2d.height / 2 - 10);
-            ctx2d.fillText('PC2', canvas2d.width / 2 + 10, 20);
-            
-            // Draw projected points
-            const scale = 40;
-            pcaResult.projected.forEach((point, i) => {
-                const x = canvas2d.width / 2 + point[0] * scale;
-                const y = canvas2d.height / 2 - point[1] * scale;
-                
-                ctx2d.fillStyle = dataPoints[i].color;
-                ctx2d.beginPath();
-                ctx2d.arc(x, y, 4, 0, Math.PI * 2);
-                ctx2d.fill();
-            });
-        }
+  function performPCA(data, previous, record) {
+    const means = columnMeans(data);
+    const centered = subtract(data, means);
+    const cov = covariance(centered);
+    const { passes, ranked } = eigenDecomposition(cov, record);
+    const eigenvalues = ranked.map(i => passes[i].eigenvalue);
+    const total = eigenvalues.reduce((a, b) => a + b, 0);
+    const explained = eigenvalues.map(value => (total > 0 ? value / total : 0));
 
-        // Animation loop
-        function animate() {
-            const speed = parseFloat(document.getElementById('rotationSpeed').value);
-            if (speed > 0) {
-                rotation += speed * 0.01;
-                draw3D();
-            }
-            requestAnimationFrame(animate);
-        }
+    // An eigenvector is only defined up to its sign, and a random start lands on either one. Keep the
+    // sign of the previous result when there is one, else point the largest component the positive way,
+    // so running again never mirrors the projection.
+    const components = ranked.map((index, rank) => {
+      const pass = passes[index], v = pass.vector;
+      const along = previous ? dot(v, previous[rank]) : 0;
+      let flip;
+      if (Math.abs(along) > .2) flip = along < 0;
+      else { let big = 0; for (let i = 1; i < 3; i++) if (Math.abs(v[i]) > Math.abs(v[big])) big = i; flip = v[big] < 0; }
+      pass.sign = flip ? -1 : 1;
+      return flip ? v.map(value => -value) : v;
+    });
 
-        // Reset view
-        function resetView() {
-            rotation = 0;
-            draw3D();
-        }
+    // Projection: each centred point's coordinate along every principal axis.
+    const scores = centered.map(row => components.map(axis => dot(row, axis)));
+    // What the 2D projection leaves behind: the part of each point that sticks out of the PC1-PC2 plane.
+    const residual = centered.map((row, i) => row.map((value, j) => value - scores[i][0] * components[0][j] - scores[i][1] * components[1][j]));
+    const lost = residual.map(r => Math.hypot(r[0], r[1], r[2]));
 
-        // Event listeners
-        document.getElementById('numPoints').addEventListener('input', (e) => {
-            document.getElementById('numPointsValue').textContent = e.target.value;
-        });
+    // A right-handed, exactly orthonormal copy of the axes for the camera. PC1 and PC2 keep their sign,
+    // so looking down the third axis shows the same picture as the 2D plot.
+    const r1 = unit(components[0]);
+    const k = dot(components[1], r1);
+    const r2 = unit(components[1].map((value, i) => value - k * r1[i]));
+    const r3 = cross(r1, r2);
+    const offPlane = centered.map(row => dot(row, r3));
+    let reach = 0, extentX = 0, extentY = 0;
+    centered.forEach((row, i) => {
+      reach = Math.max(reach, Math.hypot(row[0], row[1], row[2]));
+      extentX = Math.max(extentX, Math.abs(scores[i][0]));
+      extentY = Math.max(extentY, Math.abs(scores[i][1]));
+    });
+    const sigma = eigenvalues.map(value => Math.sqrt(Math.max(0, value)));
+    return {
+      means, cov, eigenvalues, explained, components, scores, residual, lost, offPlane, passes, sigma,
+      frame: [r1, r2, r3],
+      frameQuat: quatFromMatrix([r1, r2, r3]),
+      extent: [extentX || 1, extentY || 1],
+      // Axes are drawn this many standard deviations long: two, or less when that would leave the plot.
+      axisScale: sigma[0] > 0 ? Math.min(2, .95 * reach / sigma[0]) : 1,
+      iterations: ranked.map(i => passes[i].iterations),
+    };
+  }
 
-        document.getElementById('numClusters').addEventListener('input', (e) => {
-            document.getElementById('numClustersValue').textContent = e.target.value;
-        });
+  // Rotation matrix (rows) to quaternion [w, x, y, z], and back.
+  function quatFromMatrix(m) {
+    const trace = m[0][0] + m[1][1] + m[2][2];
+    let w, x, y, z, s;
+    if (trace > 0) { s = Math.sqrt(trace + 1) * 2; w = s / 4; x = (m[2][1] - m[1][2]) / s; y = (m[0][2] - m[2][0]) / s; z = (m[1][0] - m[0][1]) / s; }
+    else if (m[0][0] > m[1][1] && m[0][0] > m[2][2]) { s = Math.sqrt(1 + m[0][0] - m[1][1] - m[2][2]) * 2; w = (m[2][1] - m[1][2]) / s; x = s / 4; y = (m[0][1] + m[1][0]) / s; z = (m[0][2] + m[2][0]) / s; }
+    else if (m[1][1] > m[2][2]) { s = Math.sqrt(1 + m[1][1] - m[0][0] - m[2][2]) * 2; w = (m[0][2] - m[2][0]) / s; x = (m[0][1] + m[1][0]) / s; y = s / 4; z = (m[1][2] + m[2][1]) / s; }
+    else { s = Math.sqrt(1 + m[2][2] - m[0][0] - m[1][1]) * 2; w = (m[1][0] - m[0][1]) / s; x = (m[0][2] + m[2][0]) / s; y = (m[1][2] + m[2][1]) / s; z = s / 4; }
+    return w < 0 ? [-w, -x, -y, -z] : [w, x, y, z];
+  }
+  function matrixFromQuat([w, x, y, z]) {
+    return [
+      [1 - 2 * (y * y + z * z), 2 * (x * y - z * w), 2 * (x * z + y * w)],
+      [2 * (x * y + z * w), 1 - 2 * (x * x + z * z), 2 * (y * z - x * w)],
+      [2 * (x * z - y * w), 2 * (y * z + x * w), 1 - 2 * (x * x + y * y)],
+    ];
+  }
+  // The frame the 3D view is drawn in: the identity, the PC frame, or a rotation part-way between them.
+  function frameMatrix() {
+    if (!pca || frameT <= 0) return IDENTITY;
+    if (frameT >= 1) return pca.frame;
+    const [w, x, y, z] = pca.frameQuat;
+    const half = Math.acos(Math.min(1, w));
+    if (half < 1e-6) return IDENTITY;
+    const a = Math.sin((1 - frameT) * half) / Math.sin(half), b = Math.sin(frameT * half) / Math.sin(half);
+    return matrixFromQuat([a + b * w, b * x, b * y, b * z]);
+  }
 
-        document.getElementById('spread').addEventListener('input', (e) => {
-            document.getElementById('spreadValue').textContent = e.target.value;
-        });
+  /* ------------------------------------------------------------------ Data */
+  function newSeeds() {
+    seeds = { centres: [], offsets: [] };
+    for (let c = 0; c < MAX_CLUSTERS; c++) {
+      seeds.centres.push([(Math.random() - 0.5) * 8, (Math.random() - 0.5) * 8, (Math.random() - 0.5) * 8]);
+      const list = [];
+      for (let i = 0; i < MAX_POINTS; i++) list.push([Math.random() - 0.5, Math.random() - 0.5, Math.random() - 0.5]);
+      seeds.offsets.push(list);
+    }
+  }
 
-        document.getElementById('rotationSpeed').addEventListener('input', (e) => {
-            document.getElementById('rotationSpeedValue').textContent = e.target.value;
-        });
+  function buildPoints() {
+    points = [];
+    counts = [];
+    // Share the remainder out so the dataset holds exactly N points.
+    const base = Math.floor(N / K), extra = N % K;
+    for (let c = 0; c < K; c++) {
+      const [cx, cy, cz] = seeds.centres[c];
+      counts.push(base + (c < extra ? 1 : 0));
+      for (let i = 0; i < counts[c]; i++) {
+        const u = seeds.offsets[c][i];
+        points.push({ x: cx + u[0] * spread * 2, y: cy + u[1] * spread * 2, z: cz + u[2] * spread * 2, cluster: c });
+      }
+    }
+    const data = toRows();
+    centre = columnMeans(data);
+    rel = subtract(data, centre);
+    radius = rel.reduce((max, r) => Math.max(max, Math.hypot(r[0], r[1], r[2])), 0) || 1;
+    spots3 = points.map(() => ({ x: 0, y: 0, z: 0, f: 1, behind: false }));
+    spots2 = points.map(() => ({ x: 0, y: 0 }));
+    order = points.map((_, i) => i);
+    hovered = -1;
+    SGLab.tooltip.hide();
+  }
+  const toRows = () => points.map(p => [p.x, p.y, p.z]);
 
-        // Initialize
-        generateNewData();
-        animate();
-    </script>
+  /* ------------------------------------------------------------- Animation */
+  // One frame loop serves everything. It runs only while something moves and stops itself afterwards.
+  const tweens = new Map();
+  let raf = 0, lastFrame = 0, dirty3 = true, dirty2 = true;
+
+  function invalidate() { dirty3 = dirty2 = true; schedule(); }
+  function schedule() { if (!raf) raf = requestAnimationFrame(frame); }
+  const spinning = () => speed > 0 && !dragging && !pointerInside && onScreen && !document.hidden;
+
+  function frame(now) {
+    raf = 0;
+    const dt = lastFrame ? Math.min(.05, (now - lastFrame) / 1000) : 0;
+    lastFrame = now;
+    let active = false;
+    if (spinning()) { az += speed * SPIN * dt; dirty3 = true; active = true; }
+    for (const [name, tw] of [...tweens]) {
+      if (!tw.start) tw.start = now;
+      const t = Math.min(1, (now - tw.start) / tw.ms);
+      tw.update(t);
+      dirty3 = dirty2 = true;
+      if (t >= 1) { if (tweens.get(name) === tw) tweens.delete(name); if (tw.done) tw.done(); }
+    }
+    if (tweens.size) active = true;
+    if (dirty3) { dirty3 = false; draw3D(); }
+    if (dirty2) { dirty2 = false; draw2D(); }
+    if (active) raf = requestAnimationFrame(frame); else lastFrame = 0;
+  }
+
+  // A named tween replaces any earlier one of the same name. With reduced motion it lands at once.
+  function tween(name, ms, update, done) {
+    if (SGLab.reducedMotion || ms <= 0) { tweens.delete(name); update(1); if (done) done(); invalidate(); return; }
+    tweens.set(name, { start: 0, ms, update, done });
+    schedule();
+  }
+
+  /* ------------------------------------------------------------------- Run */
+  function cancelRun() {
+    token++;
+    tweens.delete('run');
+    reveal.probe = null;
+    if (phase === 'running') phase = 'idle';
+  }
+  function setReveal(on) {
+    reveal.origin = on ? 1 : 0;
+    reveal.cov = on;
+    reveal.found = [on, on, on];
+    reveal.back = on ? [1, 1, 1] : [0, 0, 0];
+    reveal.plane = on ? 1 : 0;
+    reveal.unfold = on ? 1 : 0;
+    reveal.probe = null;
+  }
+
+  function run() {
+    if (phase === 'running') { finish(); return; }          // second press: skip to the result
+    if (!points.length) { setStatus('warn', 'There is no data to analyse yet. Press New data first.'); return; }
+    cancelRun();
+    const animate = !SGLab.reducedMotion;
+    pca = performPCA(toRows(), pca && pca.components, animate);
+    if (!animate) { finish(); return; }
+    phase = 'running';
+    setReveal(false);
+    setFlat(false, true);
+    if (frameT > 0) resetView(true);
+    renderAll();
+    play();
+  }
+
+  function finish() {
+    cancelRun();
+    phase = 'done';
+    setReveal(true);
+    renderAll();
+    setStatus('done', `Done. PC1 and PC2 keep ${percent(pca.explained[0] + pca.explained[1])} of the variance. Hover a point to find it in both views.`);
+  }
+
+  // Iterates worth showing: early ones turn fast, later ones barely move, so sample them ever more sparsely.
+  function keyframes(pass) {
+    const last = pass.trail.length - 1, picks = [];
+    for (let i = 0; i < last && picks.length < 9; i = Math.max(i + 1, Math.round(i * 1.5))) picks.push(i);
+    picks.push(last);
+    return picks;
+  }
+  function probeAt(pass, picks, t) {
+    const at = t * (picks.length - 1), i = Math.min(picks.length - 2, Math.floor(at)), f = at - i;
+    const a = pass.trail[picks[Math.max(0, i)]], b = pass.trail[picks[Math.min(picks.length - 1, i + 1)]];
+    const lambda = state => (state.lambda === null ? pass.eigenvalue : state.lambda);
+    const dir = unit([0, 1, 2].map(j => lerp(a.v[j], b.v[j], f) * pass.sign));
+    return { dir, sigma: Math.sqrt(Math.max(0, lerp(lambda(a), lambda(b), f))), iteration: picks[Math.round(at)] };
+  }
+
+  function play() {
+    const mine = token;
+    const steps = [
+      {
+        ms: 800,
+        enter() { setStatus('running', `Step 1 of 4 · Centre: subtract the mean (${pca.means.map(v => num(v)).join(', ')}) so the origin moves into the cloud.`); },
+        update(t) { reveal.origin = easeInOut(t); },
+      },
+      {
+        ms: 750,
+        enter() { reveal.cov = true; renderCov(); setStatus('running', 'Step 2 of 4 · Covariance: a 3 × 3 matrix records how x, y and z vary together.'); },
+      },
+    ];
+    pca.passes.forEach((pass, index) => {
+      const picks = keyframes(pass), name = `PC${pass.rank + 1}`;
+      steps.push({
+        ms: Math.max(560, picks.length * 85),
+        enter() { setStatus('running', `Step 3 of 4 · Power iteration, pass ${index + 1} of 3: multiply by the matrix and normalise until the vector stops turning.`); },
+        update(t) { reveal.probe = probeAt(pass, picks, t); },
+        exit() { reveal.probe = null; reveal.found[pass.rank] = true; renderBars(); renderAxes(); renderStats(); },
+      });
+      steps.push({
+        ms: 640,
+        enter() { setStatus('running', `Pass ${index + 1} settled on ${name} after ${plural(pass.iterations, 'iteration')}.${index < 2 ? ' Deflation removes its variance before the next pass.' : ''}`); },
+        update(t) { reveal.back[pass.rank] = easeOut(t); },
+      });
+    });
+    steps.push({
+      ms: 1000,
+      enter() { syncChrome(true); setStatus('running', 'Step 4 of 4 · Project: every point keeps its PC1 and PC2 coordinates and drops PC3.'); },
+      update(t) { reveal.plane = easeOut(Math.min(1, t * 1.6)); reveal.unfold = easeOut(clamp((t - .1) / .9, 0, 1)); },
+    });
+
+    let index = 0;
+    const next = () => {
+      if (mine !== token) return;
+      const step = steps[index++];
+      if (!step) { finish(); return; }
+      if (step.enter) step.enter();
+      tween('run', step.ms, t => { if (mine === token && step.update) step.update(t); }, () => {
+        if (mine !== token) return;
+        if (step.exit) step.exit();
+        next();
+      });
+    };
+    next();
+  }
+
+  // The dataset changed. A finished analysis follows it live; an unfinished one is dropped.
+  function dataChanged(what, fresh) {
+    const wasRunning = phase === 'running';
+    cancelRun();
+    buildPoints();
+    const size = `${points.length} points in ${plural(K, 'cluster')}`;
+    if (phase === 'done') {
+      pca = performPCA(toRows(), fresh ? null : pca.components, false);
+      renderAll();
+      setStatus('done', `${what} PCA follows the data: ${size}, and PC1 with PC2 keep ${percent(pca.explained[0] + pca.explained[1])} of the variance.`);
+      return;
+    }
+    pca = null;
+    setReveal(false);
+    setFlat(false, true);
+    if (frameT > 0 || savedSpeed !== null) { frameT = 0; tweens.delete('frame'); resetView(true); }
+    renderAll();
+    setStatus('idle', wasRunning ? `${what} The run was cancelled: press Run PCA to analyse the ${points.length} points now on the plot.` : `${what} ${size}. Press Run PCA to find the directions of greatest variance.`);
+  }
+
+  /* ------------------------------------------------------------------ View */
+  function orbitTo(targetAz, targetEl, ms) {
+    az = Math.atan2(Math.sin(az), Math.cos(az));           // unwind full turns so the camera takes the short way round
+    const fromAz = az, fromEl = el;
+    const delta = Math.atan2(Math.sin(targetAz - fromAz), Math.cos(targetAz - fromAz));
+    tween('orbit', ms, t => { const e = easeInOut(t); az = fromAz + delta * e; el = lerp(fromEl, targetEl, e); });
+  }
+  function frameTo(target, ms) {
+    const from = frameT;
+    tween('frame', ms, t => { frameT = lerp(from, target, easeInOut(t)); });
+  }
+
+  function matchView() {
+    if (phase !== 'done') return;
+    if (speed > 0) { savedSpeed = speed; setSpeed(0); }     // a turning plot would leave the matched angle at once
+    frameTo(1, 950);
+    orbitTo(0, 0, 950);
+    setStatus('done', 'The 3D view now looks straight down PC3, so it shows the same picture as the projection. Rotation is paused.');
+  }
+
+  function resetView(quiet) {
+    frameTo(0, 800);
+    orbitTo(AZ0, EL0, 800);
+    if (savedSpeed !== null) { setSpeed(savedSpeed); savedSpeed = null; }
+    if (!quiet && phase !== 'running') setStatus(phase === 'done' ? 'done' : 'idle', 'View reset. Drag the 3D plot to orbit it yourself.');
+  }
+
+  function setFlat(on, quiet) {
+    flat = on && phase === 'done';
+    $('showOriginal').setAttribute('aria-pressed', String(!flat));
+    $('showFlat').setAttribute('aria-pressed', String(flat));
+    const from = flatT, to = flat ? 1 : 0;
+    if (quiet) { tweens.delete('flat'); flatT = to; invalidate(); return; }
+    tween('flat', 750, t => { flatT = lerp(from, to, easeInOut(t)); });
+    setStatus('done', flat
+      ? 'Flattened: every point has moved onto the PC1–PC2 plane. The distance it travelled is what the projection discards.'
+      : 'Original positions restored. The shaded sheet is the PC1–PC2 plane the projection keeps.');
+  }
+
+  function setSpeed(value) {
+    speed = value;
+    $('speedSlider').value = value;
+    $('speedValue').textContent = value.toFixed(1);
+    SGLab.syncRanges($('speedSlider').parentElement);
+    schedule();
+  }
+
+  /* --------------------------------------------------------------- Drawing */
+  const view3 = SGLab.fitCanvas($('plot3d'), WIDTH, HEIGHT, () => draw3D());
+  const view2 = SGLab.fitCanvas($('plot2d'), WIDTH, HEIGHT, () => draw2D());
+
+  // Chart chrome is read once per frame rather than once per mark.
+  const chrome = () => ({ ink: SGLab.ink(), muted: SGLab.muted(), faint: SGLab.faint(), grid: SGLab.grid(), axis: SGLab.axis(), plot: SGLab.plot(), live: SGLab.accent(3) });
+
+  function text(ctx, view, string, x, y, color, font, halo) {
+    ctx.font = font;
+    if (halo) { ctx.lineJoin = 'round'; ctx.lineWidth = view.px(4); ctx.strokeStyle = halo; ctx.strokeText(string, x, y); }
+    ctx.fillStyle = color;
+    ctx.fillText(string, x, y);
+  }
+
+  // A line from a to b with an arrowhead at b and a label just beyond it.
+  function arrow(ctx, view, a, b, options) {
+    const dx = b.x - a.x, dy = b.y - a.y, length = Math.hypot(dx, dy) || 1;
+    const ux = dx / length, uy = dy / length, head = length > view.px(14) ? view.px(9) : 0;
+    const ex = b.x - ux * head * .7, ey = b.y - uy * head * .7;
+    ctx.lineCap = 'round';
+    for (const [color, width] of [[options.casing, options.width + view.px(3)], [options.color, options.width]]) {
+      ctx.strokeStyle = color;
+      ctx.lineWidth = width;
+      ctx.beginPath(); ctx.moveTo(a.x, a.y); ctx.lineTo(ex, ey); ctx.stroke();
+    }
+    if (head) {
+      const wx = -uy * head * .48, wy = ux * head * .48;
+      ctx.beginPath();
+      ctx.moveTo(b.x, b.y); ctx.lineTo(b.x - ux * head + wx, b.y - uy * head + wy); ctx.lineTo(b.x - ux * head - wx, b.y - uy * head - wy);
+      ctx.closePath();
+      ctx.lineJoin = 'round'; ctx.lineWidth = view.px(3); ctx.strokeStyle = options.casing; ctx.stroke();
+      ctx.fillStyle = options.color; ctx.fill();
+    }
+    if (options.label) {
+      ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+      text(ctx, view, options.label, b.x + ux * view.px(18), b.y + uy * view.px(14), options.labelColor || options.color, options.font, options.casing);
+    }
+  }
+
+  function draw3D() {
+    const C = chrome(), ctx = view3.ctx, px = view3.px;
+    view3.begin();
+    const scale = REACH / radius;
+    // Matching the 2D view also pulls the camera far back, so perspective fades into a flat projection.
+    const distance = radius * 6 / (1 - .96 * frameT);
+    const F = frameMatrix();
+    const ca = Math.cos(az), sa = Math.sin(az), ce = Math.cos(el), se = Math.sin(el);
+    const turn = (x, y, z) => {
+      const fx = F[0][0] * x + F[0][1] * y + F[0][2] * z, fy = F[1][0] * x + F[1][1] * y + F[1][2] * z, fz = F[2][0] * x + F[2][1] * y + F[2][2] * z;
+      const x1 = fx * ca + fz * sa, z1 = fz * ca - fx * sa;
+      return [x1, fy * ce - z1 * se, fy * se + z1 * ce];
+    };
+    // Coordinates measured from the mean -> logical pixels. `z` grows towards the viewer.
+    const place = (x, y, z, out = {}) => {
+      const v = turn(x, y, z), f = distance / (distance - v[2]);
+      out.x = CX + v[0] * f * scale; out.y = CY - v[1] * f * scale; out.z = v[2]; out.f = f;
+      return out;
+    };
+    const near = distance * .7;                          // anything closer to the camera than this is skipped
+
+    // Floor: a level reference under the cloud. It belongs to x, y, z, so it fades as the view turns to the PC frame.
+    if (frameT < .99) {
+      const half = radius * .8, floorY = -radius * .8, cells = 8;
+      ctx.globalAlpha = 1 - frameT;
+      ctx.lineWidth = px(1);
+      for (let i = 0; i <= cells; i++) {
+        const t = -half + 2 * half * i / cells, edge = i === 0 || i === cells;
+        const a = place(t, floorY, -half), b = place(t, floorY, half), c = place(-half, floorY, t), d = place(half, floorY, t);
+        ctx.strokeStyle = edge ? C.axis : C.grid;
+        ctx.beginPath(); ctx.moveTo(a.x, a.y); ctx.lineTo(b.x, b.y); ctx.moveTo(c.x, c.y); ctx.lineTo(d.x, d.y); ctx.stroke();
+      }
+      ctx.globalAlpha = 1;
+    }
+
+    // The data's own axes. They start at the true origin and ride to the mean when the data is centred.
+    const o = centre.map(value => -value * (1 - reveal.origin));
+    const reachAxis = radius * .42;
+    ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+    [['x', [1, 0, 0]], ['y', [0, 1, 0]], ['z', [0, 0, 1]]].forEach(([name, d]) => {
+      const a = place(o[0], o[1], o[2]), b = place(o[0] + d[0] * reachAxis, o[1] + d[1] * reachAxis, o[2] + d[2] * reachAxis);
+      if (a.z > near || b.z > near) return;
+      ctx.strokeStyle = C.faint; ctx.lineWidth = px(1.25); ctx.lineCap = 'round';
+      ctx.beginPath(); ctx.moveTo(a.x, a.y); ctx.lineTo(b.x, b.y); ctx.stroke();
+      const length = Math.hypot(b.x - a.x, b.y - a.y) || 1;
+      text(ctx, view3, name, b.x + (b.x - a.x) / length * px(10), b.y + (b.y - a.y) / length * px(10), C.muted, `500 ${px(11.5)}px ${MONO}`, C.plot);
+    });
+
+    // Points, far to near. Once the plane is up, the ones behind it are drawn first so it can veil them.
+    // Must be a real boolean: `behind` is compared strictly below, and `null && x` is null, not false.
+    const squash = flatT, planeOn = Boolean(pca && reveal.plane > 0);
+    const normalZ = planeOn ? turn(...pca.frame[2])[2] : 0;
+    for (let i = 0; i < points.length; i++) {
+      let [x, y, z] = rel[i];
+      if (squash > 0 && pca) { const r = pca.residual[i]; x -= r[0] * squash; y -= r[1] * squash; z -= r[2] * squash; }
+      place(x, y, z, spots3[i]);
+      spots3[i].behind = planeOn && pca.offPlane[i] * (1 - squash) * normalZ < -1e-9;
+    }
+    order.sort((a, b) => spots3[a].z - spots3[b].z);
+    const r = view3.mark(4.3), ring = px(1.4);
+    const paint = behind => {
+      for (const i of order) {
+        const s = spots3[i];
+        if (s.behind !== behind) continue;
+        ctx.globalAlpha = .5 + .5 * clamp((s.z + radius) / (2 * radius), 0, 1);   // far points recede
+        SGLab.marker(ctx, points[i].cluster, s.x, s.y, r * s.f, { ringWidth: ring, ringColor: C.plot });
+      }
+      ctx.globalAlpha = 1;
+    };
+    if (planeOn) {
+      paint(true);
+      const [u, v] = pca.frame, a = pca.extent[0] * 1.08, b = pca.extent[1] * 1.08;
+      const corners = [[1, 1], [-1, 1], [-1, -1], [1, -1]].map(([i, j]) => place(u[0] * a * i + v[0] * b * j, u[1] * a * i + v[1] * b * j, u[2] * a * i + v[2] * b * j));
+      ctx.beginPath();
+      corners.forEach((c, i) => (i ? ctx.lineTo(c.x, c.y) : ctx.moveTo(c.x, c.y)));
+      ctx.closePath();
+      ctx.globalAlpha = .075 * reveal.plane; ctx.fillStyle = C.ink; ctx.fill();
+      ctx.globalAlpha = .3 * reveal.plane; ctx.strokeStyle = C.ink; ctx.lineWidth = px(1); ctx.lineJoin = 'round'; ctx.stroke();
+      ctx.globalAlpha = 1;
+    }
+    paint(false);
+
+    // The hovered point, with the path it would travel onto the plane.
+    if (hovered >= 0 && spots3[hovered]) {
+      const s = spots3[hovered];
+      if (phase === 'done' && squash < .98) {
+        const p = rel[hovered], q = pca.residual[hovered], foot = place(p[0] - q[0], p[1] - q[1], p[2] - q[2]);
+        ctx.strokeStyle = C.ink; ctx.lineWidth = px(1.25);
+        ctx.beginPath(); ctx.moveTo(s.x, s.y); ctx.lineTo(foot.x, foot.y); ctx.stroke();
+        ctx.fillStyle = C.ink; ctx.beginPath(); ctx.arc(foot.x, foot.y, px(2.2), 0, Math.PI * 2); ctx.fill();
+      }
+      ctx.strokeStyle = C.ink; ctx.lineWidth = px(2);
+      ctx.beginPath(); ctx.arc(s.x, s.y, px(9), 0, Math.PI * 2); ctx.stroke();
+    }
+
+    // Principal axes through the mean, PC1 on top. Length follows the standard deviation along each one.
+    if (pca) {
+      for (let rank = 2; rank >= 0; rank--) {
+        if (!reveal.found[rank]) continue;
+        const e = pca.components[rank], h = pca.sigma[rank] * pca.axisScale, back = h * reveal.back[rank];
+        arrow(ctx, view3, place(-e[0] * back, -e[1] * back, -e[2] * back), place(e[0] * h, e[1] * h, e[2] * h),
+          { color: C.ink, casing: C.plot, width: px(rank === 2 ? 1.6 : 2.2), label: `PC${rank + 1}`, font: `600 ${px(12.5)}px ${SANS}` });
+      }
+      if (reveal.probe) {
+        const d = reveal.probe.dir, h = reveal.probe.sigma * pca.axisScale;
+        arrow(ctx, view3, place(0, 0, 0), place(d[0] * h, d[1] * h, d[2] * h),
+          { color: C.live, casing: C.plot, width: px(2.2), label: `iteration ${reveal.probe.iteration}`, labelColor: C.ink, font: `500 ${px(11.5)}px ${MONO}` });
+      }
+    }
+    if (reveal.origin > 0) {
+      const m = place(0, 0, 0);
+      ctx.globalAlpha = reveal.origin;
+      ctx.beginPath(); ctx.arc(m.x, m.y, px(3.4), 0, Math.PI * 2);
+      ctx.fillStyle = C.ink; ctx.fill();
+      ctx.lineWidth = px(1.5); ctx.strokeStyle = C.plot; ctx.stroke();
+      ctx.globalAlpha = 1;
+    }
+  }
+
+  const niceStep = raw => { const power = Math.pow(10, Math.floor(Math.log10(raw))), f = raw / power; return (f <= 1 ? 1 : f <= 2 ? 2 : f <= 5 ? 5 : 10) * power; };
+
+  function draw2D() {
+    const C = chrome(), ctx = view2.ctx, px = view2.px;
+    view2.begin();
+    const shown = pca && reveal.unfold > 0;
+    // Margins are in screen pixels so labels keep their room whatever size the canvas is.
+    const left = px(46), right = WIDTH - px(12), top = px(12), bottom = HEIGHT - px(42);
+    const ox = (left + right) / 2, oy = (top + bottom) / 2;
+    // One scale for both axes: a unit along PC1 is as long as a unit along PC2, so the spreads compare honestly.
+    const spanX = shown ? pca.extent[0] : radius, spanY = shown ? pca.extent[1] : radius;
+    const scale = Math.min((right - left) / (2.16 * spanX), (bottom - top) / (2.16 * spanY));
+    const step = niceStep((right - left) / scale / clamp((right - left) * view2.scale / 72, 3, 8));
+    const digits = step < 1 ? Math.ceil(-Math.log10(step)) : 0;
+
+    ctx.lineWidth = px(1);
+    ctx.font = `${px(10.5)}px ${MONO}`;
+    ctx.fillStyle = C.muted;
+    for (let k = Math.ceil(-(ox - left) / scale / step); k * step * scale <= right - ox; k++) {
+      const x = ox + k * step * scale;
+      ctx.strokeStyle = k ? C.grid : C.axis;
+      ctx.beginPath(); ctx.moveTo(x, top); ctx.lineTo(x, bottom); ctx.stroke();
+      ctx.textAlign = 'center'; ctx.textBaseline = 'top';
+      ctx.fillText(num(k * step, digits), x, bottom + px(7));
+    }
+    for (let k = Math.ceil(-(bottom - oy) / scale / step); k * step * scale <= oy - top; k++) {
+      const y = oy - k * step * scale;
+      ctx.strokeStyle = k ? C.grid : C.axis;
+      ctx.beginPath(); ctx.moveTo(left, y); ctx.lineTo(right, y); ctx.stroke();
+      ctx.textAlign = 'right'; ctx.textBaseline = 'middle';
+      ctx.fillText(num(k * step, digits), left - px(7), y);
+    }
+    // On a narrow plot the long title would run off the axis, so it shortens to the share alone.
+    const roomy = view2.scale > .62;
+    const title = rank => `PC${rank + 1}` + (phase === 'done' ? ` · ${percent(pca.explained[rank])}${roomy ? ' of variance' : ''}` : '');
+    ctx.textAlign = 'center'; ctx.textBaseline = 'alphabetic';
+    text(ctx, view2, title(0), ox, HEIGHT - px(9), C.ink, `600 ${px(12)}px ${SANS}`);
+    ctx.save();
+    ctx.translate(px(15), oy); ctx.rotate(-Math.PI / 2);
+    text(ctx, view2, title(1), 0, 0, C.ink, `600 ${px(12)}px ${SANS}`);
+    ctx.restore();
+    if (!shown) return;
+
+    const r = view2.mark(4.3), ring = px(1.4), grow = reveal.unfold;
+    for (let i = 0; i < points.length; i++) {
+      const s = spots2[i];
+      s.x = ox + pca.scores[i][0] * scale * grow;
+      s.y = oy - pca.scores[i][1] * scale * grow;
+      SGLab.marker(ctx, points[i].cluster, s.x, s.y, r, { ringWidth: ring, ringColor: C.plot });
+    }
+    if (hovered >= 0 && spots2[hovered]) {
+      const s = spots2[hovered];
+      SGLab.marker(ctx, points[hovered].cluster, s.x, s.y, r, { ringWidth: ring, ringColor: C.plot });
+      ctx.strokeStyle = C.ink; ctx.lineWidth = px(2);
+      ctx.beginPath(); ctx.arc(s.x, s.y, px(9), 0, Math.PI * 2); ctx.stroke();
+    }
+  }
+
+  /* ------------------------------------------------------------- Interface */
+  const num = (value, digits = 2) => { const s = value.toFixed(digits); return (Number(s) === 0 ? s.replace('-', '') : s).replace('-', '−'); };
+  const percent = share => `${(share * 100).toFixed(1)}%`;
+  const plural = (n, word) => `${n} ${word}${n === 1 ? '' : 's'}`;
+  function setStatus(state, message) { SGLab.status($('status'), state, message); }
+
+  function buildMatrix(table, rowNames) {
+    const head = table.createTHead().insertRow();
+    head.innerHTML = '<td></td>' + ['x', 'y', 'z'].map(name => `<th scope="col">${name}</th>`).join('');
+    const body = table.createTBody();
+    rowNames.forEach(name => {
+      body.insertRow().innerHTML = `<th scope="row">${name}</th>` + '<td><span>–</span><i class="mini" aria-hidden="true"></i></td>'.repeat(3);
+    });
+  }
+  function fillMatrix(table, values, limit, rowShown) {
+    [...table.tBodies[0].rows].forEach((row, r) => {
+      for (let c = 0; c < 3; c++) {
+        const cell = row.cells[c + 1], on = Boolean(values) && rowShown(r);
+        const t = on && limit > 0 ? clamp(values[r][c] / limit, -1, 1) : 0;
+        cell.firstChild.textContent = on ? num(values[r][c]) : '–';
+        cell.lastChild.classList.toggle('neg', t < 0);
+        cell.lastChild.style.setProperty('--v', Math.abs(t).toFixed(3));
+        cell.lastChild.style.setProperty('--c', SGLab.diverging(t));
+      }
+    });
+  }
+
+  function renderCov() {
+    const on = pca && reveal.cov;
+    fillMatrix($('covTable'), on ? pca.cov : null, on ? Math.max(...pca.cov.flat().map(Math.abs)) : 0, () => true);
+    $('covNote').textContent = on
+      ? `Computed after subtracting the mean (${pca.means.map(v => num(v)).join(', ')}). The diagonal holds the variance of each axis.`
+      : 'The diagonal holds the variance of each axis; the other cells show how two axes move together.';
+  }
+  function renderAxes() { fillMatrix($('axesTable'), pca ? pca.components : null, 1, rank => reveal.found[rank]); }
+
+  function renderBars() {
+    for (let rank = 0; rank < 3; rank++) {
+      const on = pca && reveal.found[rank];
+      $('bar' + rank).style.width = on ? `${(pca.explained[rank] * 100).toFixed(2)}%` : '0';
+      $('barValue' + rank).textContent = on ? percent(pca.explained[rank]) : '–';
+      $('barNote' + rank).textContent = on ? `eigenvalue ${num(pca.eigenvalues[rank])} · ${plural(pca.iterations[rank], 'iteration')}` : 'Not found yet';
+    }
+    const all = pca && reveal.found.every(Boolean);
+    $('barsNote').textContent = all
+      ? `PC1 and PC2 together keep ${percent(pca.explained[0] + pca.explained[1])}; dropping PC3 gives up ${percent(pca.explained[2])}.`
+      : 'Each eigenvalue divided by their sum: the share of the variance that lies along that component.';
+  }
+
+  function renderStats() {
+    $('pointCount').textContent = points.length;
+    const all = pca && reveal.found.every(Boolean);
+    $('keptValue').textContent = all ? percent(pca.explained[0] + pca.explained[1]) : '–';
+    const spent = pca ? pca.iterations.reduce((sum, n, rank) => sum + (reveal.found[rank] ? n : 0), 0) : 0;
+    $('iterValue').textContent = spent ? spent.toLocaleString('en') : '–';
+  }
+
+  function renderLegend() {
+    const list = $('legend');
+    list.textContent = '';
+    for (let c = 0; c < K; c++) {
+      const item = document.createElement('li');
+      const swatch = document.createElement('canvas');
+      swatch.width = swatch.height = 28;
+      swatch.setAttribute('aria-hidden', 'true');
+      SGLab.marker(swatch.getContext('2d'), c, 14, 14, 9, { ring: false });
+      const count = document.createElement('span');
+      count.className = 'count';
+      count.textContent = `${counts[c]} pts`;
+      item.append(swatch, `Cluster ${c + 1}`, count);
+      list.append(item);
+    }
+  }
+
+  // Buttons, the empty state and the accessible descriptions all follow the phase.
+  function syncChrome(projecting) {
+    const done = phase === 'done';
+    $('runLabel').textContent = phase === 'running' ? 'Skip to result' : done ? 'Replay' : 'Run PCA';
+    $('runIcon').setAttribute('d', phase === 'running' ? 'M6 5v14l9-7zm10 0h2.5v14H16z'
+      : done ? 'M12 5V1L7 6l5 5V7a6 6 0 1 1-6 6H4a8 8 0 1 0 8-8z' : 'M8 5v14l11-7z');
+    $('match').disabled = !done;
+    $('showFlat').disabled = !done;
+    $('empty2d').hidden = done || Boolean(projecting);
+    $('keptChip').hidden = !done;
+    if (done) $('keptChip').textContent = `${percent(pca.explained[0] + pca.explained[1])} variance kept`;
+    const size = `${points.length} points in ${plural(K, 'cluster')}`;
+    $('plot3d').setAttribute('aria-label', `3D scatter plot of ${size}. Each cluster has its own colour and marker shape.`
+      + (done ? ' The principal axes PC1, PC2 and PC3 cross at the mean, and the PC1–PC2 plane is shaded.' : ''));
+    $('plot2d').setAttribute('aria-label', done
+      ? `Scatter plot of the ${size} projected onto PC1, which explains ${percent(pca.explained[0])} of the variance, and PC2, which explains ${percent(pca.explained[1])}.`
+      : 'Projection plot, empty until PCA has run.');
+  }
+
+  function renderAll() {
+    renderStats(); renderBars(); renderCov(); renderAxes(); renderLegend(); syncChrome();
+    invalidate();
+  }
+
+  /* ---------------------------------------------------------------- Events */
+  $('nSlider').addEventListener('input', event => {
+    N = parseInt(event.target.value, 10);
+    $('nValue').textContent = N;
+    dataChanged(`N set to ${N}.`);
+  });
+  $('kSlider').addEventListener('input', event => {
+    K = parseInt(event.target.value, 10);
+    $('kValue').textContent = K;
+    dataChanged(`Clusters set to ${K}.`);
+  });
+  $('spreadSlider').addEventListener('input', event => {
+    spread = parseFloat(event.target.value);
+    $('spreadValue').textContent = spread.toFixed(1);
+    dataChanged(`Spread set to ${spread.toFixed(1)}.`);
+  });
+  $('speedSlider').addEventListener('input', event => {
+    savedSpeed = null;                                    // the visitor has taken the wheel
+    speed = parseFloat(event.target.value);
+    $('speedValue').textContent = speed.toFixed(1);
+    schedule();
+  });
+  $('newData').addEventListener('click', () => { newSeeds(); dataChanged('New dataset.', true); });
+  $('run').addEventListener('click', run);
+  $('match').addEventListener('click', matchView);
+  $('resetView').addEventListener('click', () => resetView(false));
+  $('showOriginal').addEventListener('click', () => { if (flat) setFlat(false); });
+  $('showFlat').addEventListener('click', () => { if (!flat && phase === 'done') setFlat(true); });
+
+  function nearest(spots, view, event) {
+    const p = view.toLogical(event);
+    let best = -1, bestDist = view.px(14);
+    for (let i = 0; i < spots.length; i++) {
+      const d = Math.hypot(spots[i].x - p.x, spots[i].y - p.y);
+      if (d < bestDist) { bestDist = d; best = i; }
+    }
+    return best;
+  }
+  function inspect(event, index) {
+    if (index !== hovered) { hovered = index; invalidate(); }
+    if (index < 0) { SGLab.tooltip.hide(); return; }
+    const p = points[index], done = phase === 'done';
+    SGLab.tooltip.show(event.clientX, event.clientY,
+      `<div class="tip-row"><i style="--c:${SGLab.color(p.cluster)}"></i><b>Cluster ${p.cluster + 1}</b></div>`
+      + (done ? `<div>PC1 <b>${num(pca.scores[index][0])}</b> · PC2 <b>${num(pca.scores[index][1])}</b></div>` : '')
+      + `<div class="tip-muted">x ${num(p.x)} · y ${num(p.y)} · z ${num(p.z)}</div>`
+      + (done ? `<div class="tip-muted">${num(pca.lost[index])} from the PC1–PC2 plane</div>` : ''));
+  }
+
+  const plot3d = $('plot3d'), plot2d = $('plot2d');
+  plot3d.addEventListener('pointerenter', () => { pointerInside = true; });
+  plot3d.addEventListener('pointerdown', event => {
+    if (event.pointerType === 'mouse' && event.button !== 0) return;
+    dragging = true;
+    lastX = event.clientX; lastY = event.clientY;
+    tweens.delete('orbit');
+    plot3d.setPointerCapture(event.pointerId);
+    plot3d.classList.add('is-dragging');
+    inspect(event, -1);
+  });
+  plot3d.addEventListener('pointermove', event => {
+    pointerInside = true;
+    if (!dragging) { inspect(event, nearest(spots3, view3, event)); return; }
+    az += (event.clientX - lastX) * .01;
+    el = clamp(el + (event.clientY - lastY) * .01, -1.45, 1.45);
+    lastX = event.clientX; lastY = event.clientY;
+    invalidate();
+  });
+  const endDrag = () => { if (!dragging) return; dragging = false; plot3d.classList.remove('is-dragging'); schedule(); };
+  plot3d.addEventListener('pointerup', endDrag);
+  plot3d.addEventListener('pointercancel', endDrag);
+  plot3d.addEventListener('lostpointercapture', endDrag);
+  plot3d.addEventListener('pointerleave', event => { pointerInside = false; inspect(event, -1); schedule(); });
+  plot2d.addEventListener('pointermove', event => inspect(event, pca && reveal.unfold > 0 ? nearest(spots2, view2, event) : -1));
+  plot2d.addEventListener('pointerleave', event => inspect(event, -1));
+
+  // The plot only turns while someone can see it.
+  if ('IntersectionObserver' in window) new IntersectionObserver(entries => { onScreen = entries[entries.length - 1].isIntersecting; if (onScreen) schedule(); }).observe(plot3d);
+  document.addEventListener('visibilitychange', () => { if (!document.hidden) schedule(); });
+  SGLab.onTheme(() => invalidate());
+  if (document.fonts && document.fonts.ready) document.fonts.ready.then(() => invalidate());
+
+  /* ------------------------------------------------------------------ Init */
+  buildMatrix($('covTable'), ['x', 'y', 'z']);
+  buildMatrix($('axesTable'), ['PC1', 'PC2', 'PC3']);
+  if (SGLab.reducedMotion) {
+    setSpeed(0);
+    $('speedHint').textContent = 'Rotation starts at 0 because reduced motion is on. Drag the plot to orbit it, or raise the speed if you want it to turn.';
+  }
+  newSeeds();
+  buildPoints();
+  renderAll();
+  setStatus('idle', `${points.length} points in ${plural(K, 'cluster')}. Press Run PCA to find the directions of greatest variance.`);
+})();
+</script>
 </body>
 </html>

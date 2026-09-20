@@ -82,12 +82,19 @@
     marquee.style.setProperty('--skew', `${clamp(velocity * -.12, -9, 9).toFixed(2)}deg`);
     marqueeFrame = Math.abs(velocity) > .05 ? requestAnimationFrame(easeMarquee) : 0;
   }
+  const labShell = document.querySelector('.lab-shell');
+  // A running playground is an app surface: the floating nav would sit on top of its controls.
+  function labInFocus() {
+    if (!labShell || !labShell.querySelector('[data-lab-frame]:not([hidden])')) return false;
+    const rect = labShell.getBoundingClientRect();
+    return rect.top < 96 && rect.bottom > 160;
+  }
   function onScroll() {
     const y = scrollY;
     const delta = y - lastY;
     lastY = y;
     progress?.style.setProperty('--progress', (y / Math.max(1, root.scrollHeight - innerHeight)).toFixed(4));
-    if (header && Math.abs(delta) > 4 && menu?.getAttribute('aria-expanded') !== 'true') header.classList.toggle('is-hidden', delta > 0 && y > 260);
+    if (header && Math.abs(delta) > 4 && menu?.getAttribute('aria-expanded') !== 'true') header.classList.toggle('is-hidden', (delta > 0 && y > 260) || labInFocus());
     if (marquee && motionOn()) {
       velocity = clamp(velocity + delta * .35, -80, 80);
       if (!marqueeFrame) marqueeFrame = requestAnimationFrame(easeMarquee);
@@ -252,6 +259,11 @@
     dispatchEvent(new Event('sg-motion'));
   });
 
+  // Labs run in sandboxed frames, so the theme reaches them as a message rather than shared storage.
+  const labFrames = [...document.querySelectorAll('.lab-frame,.comparison-frame')];
+  function postTheme(frame) { frame.contentWindow?.postMessage({ type: 'sg-theme', theme: currentTheme() }, '*'); }
+  labFrames.forEach(frame => frame.addEventListener('load', () => postTheme(frame)));
+
   const themeButtons = [...document.querySelectorAll('[data-theme-set]')];
   const themes = themeButtons.map(button => button.dataset.themeSet);
   const currentTheme = () => root.dataset.theme || themes[0];
@@ -267,6 +279,7 @@
       root.dataset.theme = name;
       markTheme();
       dispatchEvent(new Event('sg-theme'));
+      labFrames.forEach(postTheme);
     });
     store.set('sg-theme', name);
   }
@@ -334,7 +347,8 @@
   document.querySelector('[data-launch-lab]')?.addEventListener('click', event => {
     const button = event.currentTarget;
     const iframe = document.querySelector('[data-lab-frame]');
-    iframe.src = button.dataset.launchLab;
+    // The query string lets the lab paint in the right theme on its very first frame.
+    iframe.src = `${button.dataset.launchLab}?theme=${encodeURIComponent(currentTheme())}${motionOn() ? '' : '&motion=off'}`;
     iframe.hidden = false;
     document.querySelector('[data-lab-placeholder]').hidden = true;
     iframe.addEventListener('load', () => { iframe.focus(); }, { once: true });

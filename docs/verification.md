@@ -32,3 +32,31 @@ The checked-in static files are ready for GitHub Pages. Deployment settings and 
 - Animation smoothness and GPU cost were not measured on real hardware; headless rendering used a software rasterizer.
 - The deployed GitHub Pages site has not been checked after this change.
 
+## Playground rebuild
+
+20 September 2026
+
+- All seven playgrounds and the clustering comparison table were rebuilt on the lab kit (`docs/lab-kit.md`). `assets/lab-theme.css`, the old `!important` override sheet, was removed; nothing references it.
+- `python scripts/check.py` passes: 21 HTML documents; 278 local links and resources; every inline lab script passes `node --check`.
+- Each lab was exercised in headless Chrome standalone at 1240x900 and in phone emulation at 390x844, then launched inside the sandboxed frame on its portfolio page. No console errors or uncaught exceptions, and no horizontal overflow at 390px, in any of them.
+- Data colours: the categorical palette was run through a palette validator against the plot surface `#0b0d16` (lightness band, chroma floor, adjacent colour-vision-deficiency separation, normal-vision separation, 3:1 contrast: all pass). Only the first three slots stay distinct when any two marks can touch, so scatter plots pair every slot with a marker shape.
+- The decision tree's new sample, Fisher's Iris (150 rows), was checked against the published dataset: overall and per-species column means match exactly. On it the lab grows the textbook CART tree (root split `petal_length <= 2.45`).
+- The gradient descent lab checks each analytic gradient against a central finite difference on load; the largest relative gap measured was 6.6e-10.
+
+Defects fixed, by lab:
+
+- K-Means: status stuck on "Running" after convergence; 148 points for N=150 (remainder dropped); near-identical cluster colours; Reset during a run threw a TypeError; raising K after initialisation crashed the assignment step; an unbounded search loop when placing cluster centres.
+- PCA: white panels with invisible titles; 198 points for N=200; the 3D view drew no points before the first run.
+- Decision tree: root label clipped and the tree unfitted; errors shown through `alert()`, which the sandbox blocks.
+- Neural network: visualization tabs blank on load; the label defaulted to 0 with auto-correct on, so Predict taught the network that any non-zero drawing was a 0; training could be started twice at once.
+- Gradient descent: learning-rate and momentum sliders had no effect until the optimizer type changed; momentum and Adam state carried over between runs; pressing Play repeatedly multiplied the speed; a diverged run was silently moved to the origin; the self-test took a real step; display settings wiped the run; smoothing was baked into stored values; step labels drifted after 1,000 steps; contour lines were mostly missing because of a bit-mask comparison bug in the marching-squares code.
+- Attention: Sankey labels and next-token bars unreadable; duplicate tokens now get separate lanes; more than 10 tokens are capped with a message.
+- Manifold: rainbow colouring replaced by a one-hue ramp shared by both views; default camera now shows each dataset as a surface.
+
+### Remaining verification
+
+- Real devices, Safari and Firefox were not tested. Touch drawing and drag-to-rotate were only driven with synthetic pointer events.
+- The SVG and JSON exports in the tree builder report success, but the downloaded files were not opened and inspected.
+- Frame rate was not measured on real hardware; headless rendering used a software rasterizer.
+- Fonts inside the sandboxed lab frames fall back to the system font on a plain local server, because it sends no CORS header. GitHub Pages does send `Access-Control-Allow-Origin: *`, which was confirmed on the live site.
+

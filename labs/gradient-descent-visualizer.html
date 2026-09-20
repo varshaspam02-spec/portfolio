@@ -1,425 +1,536 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="en">
 <head>
-  <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Gradient Descent Visualizer – Ball on a Loss Landscape</title>
-  <style>
-    :root{--bg:#f7fafc;--panel:#ffffff;--ink:#0f172a;--muted:#6b7280;--border:#e5e7eb;--acc:#7c3aed;--acc2:#06b6d4;--ok:#16a34a;--warn:#f59e0b;--bad:#ef4444}
-    *{box-sizing:border-box}
-    html,body{height:100%}
-    body{margin:0;background:radial-gradient(1200px 800px at 10% -10%, #edf2ff 0%, #f7fafc 60%, #f7fafc 100%);color:var(--ink);font:14px/1.45 system-ui,-apple-system,Segoe UI,Roboto,Helvetica,Arial}
-    header{display:flex;align-items:center;justify-content:space-between;padding:14px 18px;border-bottom:1px solid var(--border);background:linear-gradient(180deg,#ffffff,#f9fafb)}
-    header h1{font-size:16px;margin:0}
-    .wrap{display:grid;grid-template-columns:340px 1fr;gap:14px;padding:14px;height:calc(100% - 56px)}
-    .card{background:var(--panel);border:1px solid var(--border);border-radius:16px;padding:12px;box-shadow:0 8px 24px rgba(15,23,42,.06);min-height:0}
-    .title{font-size:12px;color:var(--muted);text-transform:uppercase;letter-spacing:.12em;margin:6px 0 10px}
-    .row{display:grid;gap:8px;margin-bottom:10px}
-    label{font-size:12px;color:var(--muted)}
-    input,select,button{font:inherit}
-    input[type=number],input[type=text],select{width:100%;background:#f8fafc;color:var(--ink);border:1px solid var(--border);border-radius:10px;padding:8px 10px;outline:none}
-    input[type=range]{width:100%}
-    button{cursor:pointer;border:1px solid #e6e0ff;background:linear-gradient(180deg,#ede9fe,#ddd6fe);color:#3b0764;border-radius:12px;padding:10px 12px;font-weight:700}
-    button.secondary{background:linear-gradient(180deg,#ecfeff,#cffafe);border-color:#bae6fd;color:#0c4a6e}
-    button.ghost{background:#fff;border-color:var(--border);color:#111827}
-    button:disabled{opacity:.5;cursor:not-allowed}
-    .hint{color:var(--muted);font-size:12px}
-
-    .canvas-wrap{display:grid;grid-template-rows:auto 1fr;gap:8px;height:100%}
-    #view{width:100%;height:clamp(480px,68vh,900px);background:#fff;border:1px solid var(--border);border-radius:14px;position:relative;overflow:hidden}
-    #field{position:absolute;inset:0;width:100%;height:100%}
-    #cnv{position:absolute;inset:0;width:100%;height:100%}
-
-    .legend{display:flex;gap:10px;align-items:center;flex-wrap:wrap}
-    .badge{border-radius:999px;padding:3px 8px;border:1px solid var(--border);background:#fff;color:#475569;font-size:12px}
-
-    #lossCanvas{width:100%;height:clamp(220px,28vh,420px);background:#fff;border:1px solid var(--border);border-radius:10px;display:block}
-
-    .flex{display:flex;gap:8px;flex-wrap:wrap}
-    .grid{display:grid;gap:8px}
-    .cols-2{grid-template-columns:1fr 1fr}
-    .pill{display:inline-block;border-radius:999px;padding:2px 8px;border:1px solid var(--border);background:#fff}
-
-    .test-pass{color:var(--ok)}
-    .test-fail{color:var(--bad)}
-  </style>
-<link rel="stylesheet" href="../assets/lab-theme.css">
-<script defer src="../assets/lab-bridge.js"></script>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Gradient descent visualizer playground | Srinjoy Ghosh</title>
+<link rel="icon" type="image/svg+xml" href="../assets/favicon.svg">
+<link rel="stylesheet" href="../assets/lab.css">
+<script src="../assets/lab-bridge.js"></script>
+<style>
+  #landscape{cursor:crosshair;touch-action:manipulation}
+  #lossCanvas{cursor:crosshair;touch-action:pan-y}
+  .stage-split{display:grid;grid-template-columns:minmax(0,1.05fr) minmax(0,1fr);gap:16px;align-items:start}
+  .side-stack{display:grid;gap:16px;min-width:0}
+  .under-plot{display:grid;gap:14px;padding:4px 20px 18px}
+  .legend{display:grid;gap:8px}
+  .legend li{justify-content:flex-start}
+  .legend .swatch{width:18px;height:4px;border-radius:999px}
+  .legend .val{margin-left:auto;font:12.5px var(--mono);color:var(--muted);font-variant-numeric:tabular-nums}
+  .legend li.is-off{opacity:.45}
+  .chart-tools{display:flex;flex-wrap:wrap;align-items:center;gap:10px 20px;padding:12px 20px 0}
+  .chart-tools .field{flex:1 1 200px;grid-template-columns:auto auto minmax(0,1fr);gap:10px}
+  .chart-tools .field>input{grid-column:auto}
+  .stats-5{grid-template-columns:repeat(5,minmax(0,1fr))}
+  .stat-value{font-size:19px;font-variant-numeric:tabular-nums}
+  @media(max-width:1100px){.stage-split{grid-template-columns:1fr}}
+  @media(max-width:620px){.stats-5{grid-template-columns:repeat(2,minmax(0,1fr))}}
+</style>
 </head>
 <body>
-  <header>
-    <h1>Gradient Descent Visualizer · ball rolling on a loss landscape</h1>
-    <div class="legend">
-      <span class="badge">Contours + trail</span>
-      <span class="badge">GD / Momentum / Nesterov / Adam</span>
-      <span class="badge">Rosenbrock / Bowl / Saddle / Rastrigin</span>
-      <span class="badge" id="testBadge" title="Self-tests: finite coords & stable loop">Self‑tests: pending…</span>
-    </div>
+<div class="lab">
+  <header class="lab-head">
+    <div><a class="lab-back" href="../spaces/gradient-descent-visualizer/index.html">&larr; Back to portfolio</a><h1>Gradient descent visualizer</h1></div>
   </header>
 
-  <div class="wrap">
-    <aside class="card" style="overflow:auto">
-      <div class="title">Loss Function</div>
-      <div class="row">
-        <label>Function</label>
-        <select id="fn">
-          <option value="bowl">Quadratic bowl: 0.5(x² + 2y²)</option>
-          <option value="rosen">Rosenbrock: (1-x)² + 100(y - x²)²</option>
-          <option value="saddle">Saddle: x² - y²</option>
-          <option value="rastrigin">Rastrigin: 20 + ∑(x² - 10cos(2πx))</option>
-        </select>
-      </div>
-      <div class="row cols-2">
-        <div>
-          <label>Range</label>
-          <select id="range">
-            <option value="2">[-2,2]</option>
-            <option value="3">[-3,3]</option>
-            <option value="5" selected>[-5,5]</option>
+  <div class="lab-app">
+    <aside class="lab-side">
+      <section class="group" aria-labelledby="g-fn">
+        <h2 class="group-title" id="g-fn">Loss function</h2>
+        <div class="field">
+          <label for="fn">Function</label>
+          <select id="fn">
+            <option value="bowl">Quadratic bowl: 0.5(x² + 2y²)</option>
+            <option value="rosen">Rosenbrock: (1−x)² + 100(y−x²)²</option>
+            <option value="saddle">Saddle: x² − y²</option>
+            <option value="rastrigin">Rastrigin: 20 + Σ(x² − 10cos 2πx)</option>
           </select>
         </div>
-        <div>
-          <label>Grid resolution</label>
-          <select id="res"><option>64</option><option selected>96</option><option>128</option></select>
-        </div>
-      </div>
-      <div class="row cols-2">
-        <div>
-          <label>Color map</label>
-          <select id="cmap">
-            <option value="turbo" selected>Turbo (high contrast)</option>
-            <option value="viridis">Viridis</option>
-            <option value="warmcool">Warm–Cool</option>
-          </select>
-        </div>
-        <div>
-          <label>Contrast (γ)</label>
-          <input type="range" id="gamma" min="0.5" max="2.5" step="0.05" value="1.2" />
-        </div>
-        <div>
-          <label>Contours</label>
-          <select id="contours"><option value="on" selected>on</option><option value="off">off</option></select>
-        </div>
-        <div>
-          <label>Levels</label>
-          <input type="number" id="levels" min="4" max="40" value="12">
-        </div>
-      </div>
-
-      <div class="title">Optimizer</div>
-      <div class="row">
-        <label>Type</label>
-        <select id="opt">
-          <option value="gd">Gradient Descent</option>
-          <option value="mom" selected>Momentum</option>
-          <option value="nesterov">Nesterov Momentum</option>
-          <option value="adam">Adam</option>
-        </select>
-      </div>
-      <div class="row cols-2">
-        <div>
-          <label>Learning rate</label>
-          <input type="range" id="lr" min="0.001" max="1" step="0.001" value="0.05" />
-          <div class="hint"><span id="lrV">0.05</span></div>
-        </div>
-        <div>
-          <label>Momentum β / β₁</label>
-          <input type="range" id="beta1" min="0" max="0.999" step="0.001" value="0.9" />
-          <div class="hint"><span id="b1V">0.9</span></div>
-        </div>
-        <div>
-          <label>Nesterov/Adam β₂</label>
-          <input type="range" id="beta2" min="0" max="0.999" step="0.001" value="0.999" />
-          <div class="hint"><span id="b2V">0.999</span></div>
-        </div>
-        <div>
-          <label>Noise σ</label>
-          <input type="range" id="noise" min="0" max="0.5" step="0.001" value="0.0" />
-          <div class="hint"><span id="nzV">0.0</span></div>
-        </div>
-      </div>
-
-      <div class="row">
-        <label>Start position</label>
-        <div class="flex">
-          <button id="randStart" class="secondary">Randomize</button>
-          <button id="centerStart" class="ghost">Center</button>
-        </div>
-      </div>
-
-      <div class="row">
-        <label>Controls</label>
-        <div class="flex">
-          <button id="play">▶ Play</button>
-          <button id="pause" class="ghost">❚❚ Pause</button>
-          <button id="step" class="secondary">Step</button>
-          <button id="reset" class="ghost">Reset</button>
-        </div>
-        <div class="hint">Click the canvas to set the start. Loss updates only while running/stepping.</div>
-      </div>
-
-      <div class="title">Info</div>
-      <div class="row">
-        <div class="pill">x: <span id="xv">0.00</span></div>
-        <div class="pill">y: <span id="yv">0.00</span></div>
-        <div class="pill">f(x,y): <span id="fv">0.00</span></div>
-      </div>
-    </aside>
-
-    <main class="card" style="display:grid;grid-template-rows:1fr auto;gap:10px;overflow:auto">
-      <section class="canvas-wrap">
-        <div id="view">
-          <canvas id="field"></canvas>
-          <canvas id="cnv"></canvas>
-        </div>
-      </section>
-      <section>
-        <div class="title">Loss over steps</div>
-        <div class="flex" style="margin-bottom:6px">
-          <label style="display:flex;align-items:center;gap:6px"><input id="logScale" type="checkbox" checked> Log scale</label>
-          <label style="display:flex;align-items:center;gap:6px"><input id="smoothLoss" type="checkbox" checked> Smooth</label>
-        </div>
-        <div class="row cols-2" style="margin-top:4px">
-          <div>
-            <label>Loss scale</label>
-            <input type="range" id="lossZoom" min="0.1" max="10" step="0.1" value="1" />
-            <div class="hint"><span id="lossZoomV">1.0×</span></div>
+        <div class="field">
+          <span class="label" id="rangeLabel">Range</span>
+          <div class="seg" id="range" role="group" aria-labelledby="rangeLabel">
+            <button type="button" data-value="2" aria-pressed="false">±2</button>
+            <button type="button" data-value="3" aria-pressed="false">±3</button>
+            <button type="button" data-value="5" aria-pressed="true">±5</button>
           </div>
         </div>
-        <canvas id="lossCanvas" height="160"></canvas>
+        <div class="field">
+          <span class="label" id="scaleLabel">Colour scale</span>
+          <div class="seg" id="cscale" role="group" aria-labelledby="scaleLabel">
+            <button type="button" data-value="log" aria-pressed="true">Log</button>
+            <button type="button" data-value="linear" aria-pressed="false">Linear</button>
+          </div>
+          <p class="hint">Log spreads the low-loss valley across more of the ramp, which is what makes Rosenbrock readable.</p>
+        </div>
+        <div class="field">
+          <label for="gamma">Contrast (γ)</label><output id="gammaOut" for="gamma">1.20</output>
+          <input type="range" id="gamma" min="0.5" max="2.5" step="0.05" value="1.2">
+        </div>
+        <div class="field-pair">
+          <div class="field"><label for="res">Grid</label><select id="res"><option>64</option><option selected>96</option><option>128</option></select></div>
+          <div class="field"><label for="levels">Contours</label><output id="levelsOut" for="levels">12</output><input type="range" id="levels" min="0" max="40" step="1" value="12"></div>
+        </div>
       </section>
+
+      <section class="group" aria-labelledby="g-opt">
+        <h2 class="group-title" id="g-opt">Optimizer</h2>
+        <div class="field">
+          <span class="label" id="modeLabel">Mode</span>
+          <div class="seg" id="mode" role="group" aria-labelledby="modeLabel">
+            <button type="button" data-value="single" aria-pressed="true">One</button>
+            <button type="button" data-value="compare" aria-pressed="false">Compare all four</button>
+          </div>
+        </div>
+        <div class="field">
+          <label for="opt">Type</label>
+          <select id="opt">
+            <option value="gd">Gradient descent</option>
+            <option value="mom" selected>Momentum</option>
+            <option value="nesterov">Nesterov momentum</option>
+            <option value="adam">Adam</option>
+          </select>
+        </div>
+        <div class="field"><label for="lr">Learning rate</label><output id="lrOut" for="lr">0.050</output><input type="range" id="lr" min="0.001" max="1" step="0.001" value="0.05"></div>
+        <div class="field"><label for="beta1">Momentum β / β₁</label><output id="beta1Out" for="beta1">0.900</output><input type="range" id="beta1" min="0" max="0.999" step="0.001" value="0.9"></div>
+        <div class="field"><label for="beta2">Adam β₂</label><output id="beta2Out" for="beta2">0.999</output><input type="range" id="beta2" min="0" max="0.999" step="0.001" value="0.999"></div>
+        <div class="field"><label for="noise">Gradient noise σ</label><output id="noiseOut" for="noise">0.000</output><input type="range" id="noise" min="0" max="0.5" step="0.001" value="0"></div>
+        <p class="hint">These apply from the very next step, so you can retune a run while it moves.</p>
+      </section>
+
+      <section class="group" aria-labelledby="g-start">
+        <h2 class="group-title" id="g-start">Start position</h2>
+        <div class="btn-row">
+          <button class="btn" type="button" id="randStart">Randomize</button>
+          <button class="btn" type="button" id="centerStart">Center</button>
+        </div>
+        <p class="hint">Or click anywhere on the landscape. A new start clears the path and the optimizer's memory.</p>
+      </section>
+    </aside>
+
+    <main class="lab-stage">
+      <div class="stage-split">
+        <div class="panel">
+          <div class="panel-head">
+            <h2>Loss landscape</h2>
+            <div class="toolbar">
+              <button class="btn btn-primary" type="button" id="play"><svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path id="playIcon" d="M8 5v14l11-7z"/></svg><span id="playLabel">Play</span></button>
+              <button class="btn" type="button" id="step"><svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M6 5v14l9-7zm10 0h2.5v14H16z"/></svg>Step</button>
+              <button class="btn btn-ghost" type="button" id="reset">Reset</button>
+            </div>
+          </div>
+          <div class="plot"><canvas id="landscape" role="img" aria-label="Heat map of the loss function with contour lines. Each optimizer leaves a coloured path from the start point as it descends."></canvas></div>
+          <div class="under-plot">
+            <div class="scale"><div class="scale-bar" id="scaleBar"></div><div class="scale-ends"><span id="scaleLow"></span><span id="scaleHigh"></span></div></div>
+            <ul class="legend" id="legend"></ul>
+          </div>
+          <div class="statusbar" id="status" role="status" aria-live="polite">Press Play to let the optimizer roll downhill, or click the landscape to choose where it starts.</div>
+        </div>
+
+        <div class="side-stack">
+          <div class="panel">
+            <div class="panel-head"><h2>Position</h2><span class="chip" id="testChip">Gradient check: pending</span></div>
+            <div class="panel-body">
+              <div class="stat-grid stats-5">
+                <div class="stat"><span class="stat-label">Step</span><span class="stat-value" id="stStep">0</span></div>
+                <div class="stat"><span class="stat-label">x</span><span class="stat-value" id="stX">0.00</span></div>
+                <div class="stat"><span class="stat-label">y</span><span class="stat-value" id="stY">0.00</span></div>
+                <div class="stat"><span class="stat-label">f(x, y)</span><span class="stat-value" id="stF">0.00</span></div>
+                <div class="stat"><span class="stat-label">|∇f|</span><span class="stat-value" id="stG">0.00</span></div>
+              </div>
+            </div>
+          </div>
+          <div class="panel">
+            <div class="panel-head"><h2>Loss over steps</h2></div>
+            <div class="chart-tools">
+              <label class="check"><input type="checkbox" id="logScale" checked>Log scale</label>
+              <label class="check"><input type="checkbox" id="smoothLoss" checked>Smooth</label>
+              <div class="field"><label for="lossZoom">Zoom</label><output id="lossZoomOut" for="lossZoom">1.0×</output><input type="range" id="lossZoom" min="0.1" max="10" step="0.1" value="1"></div>
+            </div>
+            <div class="plot"><canvas id="lossCanvas" role="img" aria-label="Line chart of the loss at every step, one line per optimizer."></canvas></div>
+            <p class="hint" id="chartNote" style="padding:0 20px 16px"></p>
+          </div>
+        </div>
+      </div>
     </main>
   </div>
+</div>
 
 <script>
-// ------------- Error banner -------------
-window.addEventListener('error', (e)=>{ const b=document.getElementById('testBadge'); if(b){ b.textContent='Error: '+(e.message||'script'); b.classList.remove('test-pass'); b.classList.add('test-fail'); } console.error(e); });
-window.addEventListener('unhandledrejection', (e)=>{ const b=document.getElementById('testBadge'); if(b){ b.textContent='Error: '+(e.reason&&e.reason.message?e.reason.message:String(e.reason)); b.classList.remove('test-pass'); b.classList.add('test-fail'); } console.error(e); });
+(() => {
+  'use strict';
+  const $ = id => document.getElementById(id);
+  const SIZE = 600, MAX_POINTS = 1000, MAX_TRAIL = 4000, MAX_STEPS = 5000;
+  const MONO = "'Geist Mono', ui-monospace, Consolas, monospace";
+  // Fixed order, so every optimizer keeps its colour whether it runs alone or beside the others.
+  const OPTIMIZERS = [['gd', 'Gradient descent'], ['mom', 'Momentum'], ['nesterov', 'Nesterov'], ['adam', 'Adam']];
+  const slotOf = key => OPTIMIZERS.findIndex(o => o[0] === key);
 
-// ------------- DOM + sizing -------------
-const fieldC=document.getElementById('field');
-const drawC=document.getElementById('cnv');
-const fctx=fieldC.getContext('2d');
-const dctx=drawC.getContext('2d');
-function sizeCanvases(){
-  const view=document.getElementById('view');
-  const r=view.getBoundingClientRect();
-  const w=Math.max(1,Math.floor(r.width));
-  const h=Math.max(1,Math.floor(r.height));
-  if(fieldC.width!==w||fieldC.height!==h){ fieldC.width=w; fieldC.height=h; }
-  if(drawC.width!==w||drawC.height!==h){ drawC.width=w; drawC.height=h; }
-}
-new ResizeObserver(()=>{ sizeCanvases(); renderField(); renderFrame(); }).observe(document.getElementById('view'));
-window.addEventListener('load', ()=>{sizeCanvases(); renderField(); resetSim(); renderFrame(); runSelfTests(); requestAnimationFrame(()=>{ sizeCanvases(); renderField(); renderFrame(); });});
-window.addEventListener('resize', ()=>{sizeCanvases(); renderField(); renderFrame();});
-// loss scale UI
-document.getElementById('lossZoom')?.addEventListener('input', ()=>{ const v=+document.getElementById('lossZoom').value; document.getElementById('lossZoomV').textContent = v.toFixed(1)+'×'; updateLossChart(); });
+  /* ------------------------------------------------- Functions and gradients */
+  const FUNCTIONS = {
+    bowl: { f: ([x, y]) => ({ val: 0.5 * (x * x + 2 * y * y), grad: [x, 2 * y] }), marks: [[0, 0, 'min']] },
+    rosen: { f: ([x, y]) => { const a = 1, b = 100; return { val: (a - x) ** 2 + b * (y - x * x) ** 2, grad: [-2 * (a - x) - 4 * b * x * (y - x * x), 2 * b * (y - x * x)] }; }, marks: [[1, 1, 'min']] },
+    saddle: { f: ([x, y]) => ({ val: x * x - y * y, grad: [2 * x, -2 * y] }), marks: [[0, 0, 'saddle']] },
+    rastrigin: { f: ([x, y]) => { const A = 10; return { val: 2 * A + (x * x - A * Math.cos(2 * Math.PI * x)) + (y * y - A * Math.cos(2 * Math.PI * y)), grad: [2 * x + 2 * Math.PI * A * Math.sin(2 * Math.PI * x), 2 * y + 2 * Math.PI * A * Math.sin(2 * Math.PI * y)] }; }, marks: [[0, 0, 'global min']] },
+  };
+  const fn = () => FUNCTIONS[$('fn').value].f;
 
-// ------------- UI refs -------------
-const el = id => document.getElementById(id);
-['lr','beta1','beta2','noise'].forEach(id=>el(id).addEventListener('input',()=>{ el(id==='lr'?'lrV':id==='beta1'?'b1V':id==='beta2'?'b2V':'nzV').textContent = (+el(id).value).toFixed(3); }));
-['fn','range','res','cmap','gamma','contours','levels'].forEach(id=>el(id).addEventListener('change',()=>{ renderField(); resetSim(); renderFrame(); }));
-el('opt').addEventListener('change',()=>{ optimizer=makeOpt(); });
-el('randStart').onclick=()=>{ const R=+el('range').value; state.x=(Math.random()*2-1)*R; state.y=(Math.random()*2-1)*R; resetSim(); renderFrame(); };
-el('centerStart').onclick=()=>{ state.x=0; state.y=0; resetSim(); renderFrame(); };
-el('play').onclick=()=>{ running=true; loop(); };
-el('pause').onclick=()=>{ running=false; };
-el('step').onclick=()=>{ stepOnce(); renderFrame(); };
-el('reset').onclick=()=>{ resetSim(); renderFrame(); };
-
-// ------------- Functions & grads -------------
-function f_bowl([x,y]){ const val=0.5*(x*x+2*y*y); return {val,grad:[x,2*y]}; }
-function f_rosen([x,y]){ const a=1,b=100; const val=(a-x)**2+b*(y-x*x)**2; const dfdx=-2*(a-x)-4*b*x*(y-x*x); const dfdy=2*b*(y-x*x); return {val,grad:[dfdx,dfdy]}; }
-function f_saddle([x,y]){ return {val:x*x-y*y,grad:[2*x,-2*y]}; }
-function f_rastrigin([x,y]){ const A=10; const val=2*A+(x*x-A*Math.cos(2*Math.PI*x))+(y*y-A*Math.cos(2*Math.PI*y)); const dfdx=2*x+2*Math.PI*A*Math.sin(2*Math.PI*x); const dfdy=2*y+2*Math.PI*A*Math.sin(2*Math.PI*y); return {val,grad:[dfdx,dfdy]}; }
-function getFn(){ const v=el('fn').value; return v==='bowl'?f_bowl:v==='rosen'?f_rosen:v==='saddle'?f_saddle:f_rastrigin; }
-
-// ------------- Optimizers -------------
-function makeOpt(){ const type=el('opt').value; const lr=+el('lr').value; const b1=+el('beta1').value; const b2=+el('beta2').value; const eps=1e-8;
-  if(type==='gd'){ return {step:(p,g)=>[p[0]-lr*g[0],p[1]-lr*g[1]]}; }
-  if(type==='mom'){ let v=[0,0]; return {step:(p,g)=>{ v=[b1*v[0]+(1-b1)*g[0], b1*v[1]+(1-b1)*g[1]]; return [p[0]-lr*v[0], p[1]-lr*v[1]]; }}; }
-  if(type==='nesterov'){ let v=[0,0]; return {step:(p,g)=>{ v=[b1*v[0]+(1-b1)*g[0], b1*v[1]+(1-b1)*g[1]]; return [p[0]-lr*(b1*v[0]+(1-b1)*g[0]), p[1]-lr*(b1*v[1]+(1-b1)*g[1])]; }}; }
-  // Adam
-  let m=[0,0], v=[0,0], t=0; return {step:(p,g)=>{ t++; m=[b1*m[0]+(1-b1)*g[0], b1*m[1]+(1-b1)*g[1]]; v=[b2*v[0]+(1-b2)*g[0]*g[0], b2*v[1]+(1-b2)*g[1]*g[1]]; const mhat=[m[0]/(1-Math.pow(b1,t)), m[1]/(1-Math.pow(b1,t))]; const vhat=[v[0]/(1-Math.pow(b2,t)), v[1]/(1-Math.pow(b2,t))]; return [p[0]-lr*mhat[0]/(Math.sqrt(vhat[0])+eps), p[1]-lr*mhat[1]/(Math.sqrt(vhat[1])+eps)]; }};
-}
-let optimizer=makeOpt();
-
-// ------------- State & transforms -------------
-const state={x:-3.2,y:3.5,trail:[],loss:[]};
-function clampFinite(v,fb=0){ return Number.isFinite(v)?v:fb; }
-function worldToCanvas(x,y){ const R=+el('range').value; const w=drawC.width, h=drawC.height; return [(x+R)/(2*R)*w, h-(y+R)/(2*R)*h]; }
-function canvasToWorld(cx,cy){ const R=+el('range').value; const w=drawC.width, h=drawC.height; return [ (cx/w)*2*R-R, ((h-cy)/h)*2*R-R ]; }
-
-// ------------- Field rendering (color + contours) -------------
-function palette(t){ const gamma=+el('gamma').value; const cmap=el('cmap').value; t=Math.pow(Math.max(0,Math.min(1,t)),gamma); if(cmap==='viridis'){ const r=Math.round(255*(0.267+2.4*t-2.1*t*t)); const g=Math.round(255*(0.004+2.9*t-2.6*t*t)); const b=Math.round(255*(0.329+1.9*t-1.6*t*t)); return [r,g,b]; } if(cmap==='warmcool'){ const r=Math.round(255*t); const g=Math.round(255*(0.3+0.4*(1-Math.abs(0.5-t)*2))); const b=Math.round(255*(1-t)); return [r,g,b]; } const r=Math.round(255*(0.34+1.5*t-t*t)); const g=Math.round(255*(0.9*t*(1-t)+0.2)); const b=Math.round(255*(1.0-0.9*t)); return [r,g,b]; }
-
-let fieldCache=null; // {N,R,min,max,vals}
-function renderField(){
-  sizeCanvases();
-  const N=+el('res').value; const R=+el('range').value; const fn=getFn();
-  // compute values
-  const vals=new Float32Array(N*N); let min=Infinity,max=-Infinity;
-  for(let iy=0;iy<N;iy++){
-    for(let ix=0;ix<N;ix++){
-      const x=(ix/(N-1))*2*R-R; const y=(1-iy/(N-1))*2*R-R; const v=fn([x,y]).val; vals[iy*N+ix]=v; if(v<min)min=v; if(v>max)max=v;
-    }
+  /* -------------------------------------------------------------- Optimizers */
+  // Hyperparameters are read on every step, so the sliders act on a run that is already moving.
+  const hyper = () => ({ lr: +$('lr').value, b1: +$('beta1').value, b2: +$('beta2').value });
+  function makeOpt(type) {
+    const eps = 1e-8;
+    if (type === 'gd') return { step: (p, g) => { const { lr } = hyper(); return [p[0] - lr * g[0], p[1] - lr * g[1]]; } };
+    if (type === 'mom') { let v = [0, 0]; return { step: (p, g) => { const { lr, b1 } = hyper(); v = [b1 * v[0] + (1 - b1) * g[0], b1 * v[1] + (1 - b1) * g[1]]; return [p[0] - lr * v[0], p[1] - lr * v[1]]; } }; }
+    if (type === 'nesterov') { let v = [0, 0]; return { step: (p, g) => { const { lr, b1 } = hyper(); v = [b1 * v[0] + (1 - b1) * g[0], b1 * v[1] + (1 - b1) * g[1]]; return [p[0] - lr * (b1 * v[0] + (1 - b1) * g[0]), p[1] - lr * (b1 * v[1] + (1 - b1) * g[1])]; } }; }
+    let m = [0, 0], v = [0, 0], t = 0;
+    return { step: (p, g) => {
+      const { lr, b1, b2 } = hyper(); t++;
+      m = [b1 * m[0] + (1 - b1) * g[0], b1 * m[1] + (1 - b1) * g[1]];
+      v = [b2 * v[0] + (1 - b2) * g[0] * g[0], b2 * v[1] + (1 - b2) * g[1] * g[1]];
+      const c1 = 1 - Math.pow(b1, t) || eps, c2 = 1 - Math.pow(b2, t) || eps;
+      return [p[0] - lr * (m[0] / c1) / (Math.sqrt(v[0] / c2) + eps), p[1] - lr * (m[1] / c1) / (Math.sqrt(v[1] / c2) + eps)];
+    } };
   }
-  fieldCache={N,R,min,max,vals};
-  // draw color map
-  const img=fctx.createImageData(N,N); const span=(max-min)||1; for(let i=0;i<N*N;i++){ const t=(vals[i]-min)/span; const [r,g,b]=palette(t); const k=i*4; img.data[k]=r; img.data[k+1]=g; img.data[k+2]=b; img.data[k+3]=255; }
-  // scale to canvas
-  const off=document.createElement('canvas'); off.width=N; off.height=N; off.getContext('2d').putImageData(img,0,0); fctx.imageSmoothingEnabled=true; fctx.clearRect(0,0,fieldC.width,fieldC.height); fctx.drawImage(off,0,0,fieldC.width,fieldC.height);
-  // contours
-  if(el('contours').value==='on'){ drawContours(fieldCache, +el('levels').value); }
-}
 
-function drawContours(cache, levels){ const {N,min,max,vals}=cache; const span=(max-min)||1; const iso=[]; for(let i=1;i<=levels;i++){ iso.push(min+span*i/(levels+1)); }
-  fctx.save(); fctx.lineWidth=1; fctx.strokeStyle='rgba(15,23,42,0.25)';
-  for(const t of iso){
-    const edges=[];
-    for(let y=0;y<N-1;y++){
-      for(let x=0;x<N-1;x++){
-        const v0=vals[y*N+x]-t, v1=vals[y*N+x+1]-t, v2=vals[(y+1)*N+x+1]-t, v3=vals[(y+1)*N+x]-t;
-        const idx=(v0>0)<<3 | (v1>0)<<2 | (v2>0)<<1 | (v3>0);
-        if(idx===0||idx===15) continue;
-        const lerp=(a,b,va,vb)=> a + (b-a)*(va/(va-vb));
-        const px=x/(N-1)*fieldC.width, py=y/(N-1)*fieldC.height; const px1=(x+1)/(N-1)*fieldC.width, py1=(y+1)/(N-1)*fieldC.height;
-        const pts=[];
-        if((idx&8)!==(idx&4)){ const cx=lerp(px,px1,v0,v1); pts.push([cx,py]); }
-        if((idx&4)!==(idx&2)){ const cy=lerp(py,py1,v1,v2); pts.push([px1,cy]); }
-        if((idx&2)!==(idx&1)){ const cx=lerp(px,px1,v3,v2); pts.push([cx,py1]); }
-        if((idx&1)!==(idx&8)){ const cy=lerp(py,py1,v0,v3); pts.push([px,cy]); }
-        if(pts.length===2){ edges.push(pts); }
+  /* ------------------------------------------------------------------- State */
+  let R = 5, colourScale = 'log', mode = 'single';
+  let start = [-3.2, 3.5];
+  let runners = [];
+  let steps = 0, offset = 0;       // `offset` counts loss points that scrolled out of the chart window
+  let running = false, frame = 0;
+  let field = null, layer = null, layerKey = '';
+  let hoverStep = -1;
+
+  const segValue = (id, value) => [...$(id).children].forEach(b => b.setAttribute('aria-pressed', String(b.dataset.value === String(value))));
+  function resetRun(message) {
+    running = false; cancelAnimationFrame(frame); frame = 0;
+    const keys = mode === 'compare' ? OPTIMIZERS.map(o => o[0]) : [$('opt').value];
+    // A fresh optimizer per run: velocity and Adam's moments never leak from the previous path.
+    runners = keys.map(key => ({ key, slot: slotOf(key), opt: makeOpt(key), x: start[0], y: start[1], trail: [[start[0], start[1]]], loss: [fn()(start).val], state: 'run' }));
+    steps = 0; offset = 0; hoverStep = -1;
+    refresh();
+    if (message) setStatus('idle', message);
+  }
+
+  function stepAll() {
+    const noise = +$('noise').value, f = fn();
+    let moving = 0;
+    for (const r of runners) {
+      if (r.state !== 'run') continue;
+      const { grad } = f([r.x, r.y]);
+      const g = [grad[0] + (Math.random() * 2 - 1) * noise, grad[1] + (Math.random() * 2 - 1) * noise];
+      const next = r.opt.step([r.x, r.y], g);
+      // A blown-up run is reported as one. It is never quietly moved back to the origin.
+      if (!Number.isFinite(next[0]) || !Number.isFinite(next[1]) || Math.abs(next[0]) > 1e6 || Math.abs(next[1]) > 1e6) { r.state = 'diverged'; continue; }
+      r.x = next[0]; r.y = next[1];
+      r.trail.push([r.x, r.y]); if (r.trail.length > MAX_TRAIL) r.trail.shift();
+      const here = f([r.x, r.y]);
+      r.loss.push(here.val);
+      if (noise === 0 && Math.hypot(here.grad[0], here.grad[1]) < 1e-6) r.state = 'settled'; else moving++;
+    }
+    steps++;
+    const longest = Math.max(...runners.map(r => r.loss.length));
+    if (longest > MAX_POINTS) { runners.forEach(r => { while (r.loss.length > MAX_POINTS) r.loss.shift(); }); offset = steps + 1 - MAX_POINTS; }
+    return moving;
+  }
+
+  function finishIfDone(moving) {
+    const name = r => OPTIMIZERS[r.slot][1];
+    const lost = runners.filter(r => r.state === 'diverged');
+    if (moving > 0 && steps < MAX_STEPS) return false;
+    running = false;
+    if (lost.length === runners.length) setStatus('warn', `${lost.map(name).join(', ')} diverged after ${steps} steps: the updates grew without bound. Lower the learning rate and try again.`);
+    else if (steps >= MAX_STEPS && moving > 0) setStatus('idle', `Paused at ${MAX_STEPS.toLocaleString('en')} steps. Press Play to keep going.`);
+    else setStatus('done', `${runners.filter(r => r.state === 'settled').map(name).join(', ')} settled where the gradient vanishes, after ${steps} steps.${lost.length ? ` ${lost.map(name).join(', ')} diverged.` : ''}`);
+    return true;
+  }
+  function tick() {
+    frame = 0;
+    if (!running) return;
+    const moving = stepAll();
+    const done = finishIfDone(moving);
+    refresh();
+    if (!done) frame = requestAnimationFrame(tick);
+  }
+  function play() {
+    if (running) { running = false; refresh(); setStatus('idle', `Paused at step ${steps}.`); return; }
+    if (!runners.some(r => r.state === 'run')) resetRun();
+    running = true;
+    setStatus('running', mode === 'compare' ? 'All four optimizers are descending from the same start.' : `${OPTIMIZERS[slotOf($('opt').value)][1]} is descending.`);
+    if (!frame) frame = requestAnimationFrame(tick);      // one loop only, however often Play is pressed
+    refresh();
+  }
+  function stepOnce() {
+    if (running) return;
+    if (!runners.some(r => r.state === 'run')) resetRun();
+    const moving = stepAll();
+    if (!finishIfDone(moving)) setStatus('idle', `Step ${steps}.`);
+    refresh();
+  }
+
+  /* ---------------------------------------------------------------- Landscape */
+  const view = SGLab.fitCanvas($('landscape'), SIZE, SIZE, () => drawLandscape());
+  const toPlot = (x, y) => [(x + R) / (2 * R) * SIZE, SIZE - (y + R) / (2 * R) * SIZE];
+  const toWorld = (px, py) => [px / SIZE * 2 * R - R, (SIZE - py) / SIZE * 2 * R - R];
+
+  function computeField() {
+    const N = +$('res').value, f = fn(), vals = new Float32Array(N * N);
+    let min = Infinity, max = -Infinity;
+    for (let iy = 0; iy < N; iy++) for (let ix = 0; ix < N; ix++) {
+      const v = f([(ix / (N - 1)) * 2 * R - R, (1 - iy / (N - 1)) * 2 * R - R]).val;
+      vals[iy * N + ix] = v; if (v < min) min = v; if (v > max) max = v;
+    }
+    field = { N, min, max, vals };
+    layerKey = '';
+  }
+  // 0..1 position on the ramp. Log mode measures distance above the lowest value on a log scale.
+  function ramp01(v) {
+    const span = (field.max - field.min) || 1;
+    const t = colourScale === 'log' ? Math.log1p(v - field.min) / Math.log1p(span) : (v - field.min) / span;
+    return Math.pow(Math.max(0, Math.min(1, t)), +$('gamma').value);
+  }
+  // The surface and its contours are painted once into a layer; each frame only blits it.
+  function buildLayer(w, h) {
+    const { N, vals, min, max } = field;
+    const small = document.createElement('canvas'); small.width = small.height = N;
+    const sctx = small.getContext('2d'), img = sctx.createImageData(N, N);
+    for (let i = 0; i < N * N; i++) { const rgb = SGLab.rampRGB(ramp01(vals[i])); img.data.set([rgb[0], rgb[1], rgb[2], 255], i * 4); }
+    sctx.putImageData(img, 0, 0);
+    layer = document.createElement('canvas'); layer.width = w; layer.height = h;
+    const c = layer.getContext('2d');
+    c.imageSmoothingEnabled = true; c.drawImage(small, 0, 0, w, h);
+    const levels = +$('levels').value;
+    if (!levels) return;
+    // Marching squares. Levels are spaced evenly along the ramp so they follow the colours.
+    c.lineWidth = Math.max(1, w / SIZE); c.strokeStyle = 'rgba(244,243,239,.17)'; c.beginPath();
+    const span = (max - min) || 1, lerp = (a, b, va, vb) => a + (b - a) * (va / (va - vb));
+    for (let l = 1; l <= levels; l++) {
+      const u = l / (levels + 1), t = colourScale === 'log' ? min + Math.expm1(u * Math.log1p(span)) : min + span * u;
+      for (let y = 0; y < N - 1; y++) for (let x = 0; x < N - 1; x++) {
+        const v0 = vals[y * N + x] - t, v1 = vals[y * N + x + 1] - t, v2 = vals[(y + 1) * N + x + 1] - t, v3 = vals[(y + 1) * N + x] - t;
+        const idx = (v0 > 0) << 3 | (v1 > 0) << 2 | (v2 > 0) << 1 | (v3 > 0);
+        if (idx === 0 || idx === 15) continue;
+        const px = x / (N - 1) * w, py = y / (N - 1) * h, px1 = (x + 1) / (N - 1) * w, py1 = (y + 1) / (N - 1) * h, pts = [];
+        if ((idx & 8) >> 3 !== (idx & 4) >> 2) pts.push([lerp(px, px1, v0, v1), py]);
+        if ((idx & 4) >> 2 !== (idx & 2) >> 1) pts.push([px1, lerp(py, py1, v1, v2)]);
+        if ((idx & 2) >> 1 !== (idx & 1)) pts.push([lerp(px, px1, v3, v2), py1]);
+        if ((idx & 1) !== (idx & 8) >> 3) pts.push([px, lerp(py, py1, v0, v3)]);
+        if (pts.length === 2) { c.moveTo(pts[0][0], pts[0][1]); c.lineTo(pts[1][0], pts[1][1]); }
       }
     }
-    fctx.beginPath(); for(const [[x0,y0],[x1,y1]] of edges){ fctx.moveTo(x0,y0); fctx.lineTo(x1,y1); } fctx.stroke();
+    c.stroke();
   }
-  fctx.restore();
-}
 
-// ------------- Simulation & chart -------------
-let running=false; let lossHistory=[]; const MAX_POINTS=1000;
-function resetSim(){ running=false; state.trail=[]; state.loss=[]; lossHistory=[]; updateLossChart(); record(); }
-function record(){ const {val}=getFn()([state.x,state.y]); state.trail.push([state.x,state.y]); state.loss.push(val); pushLoss(val); updateInfo(state.x,state.y,val); }
-function stepOnce(){ const noise=+el('noise').value; const {grad}=getFn()([state.x,state.y]); const g=[grad[0]+(Math.random()*2-1)*noise, grad[1]+(Math.random()*2-1)*noise]; const next=optimizer.step([state.x,state.y],g); state.x=clampFinite(next[0],0); state.y=clampFinite(next[1],0); record(); }
-function loop(){ if(!running) return; stepOnce(); renderFrame(); requestAnimationFrame(loop); }
-
-function updateInfo(x,y,f){ el('xv').textContent=x.toFixed(2); el('yv').textContent=y.toFixed(2); el('fv').textContent=f.toFixed(4); }
-// ------------- Rendering of ball + trail + arrow -------------
-function renderFrame(){ dctx.clearRect(0,0,drawC.width,drawC.height); // axes
-  dctx.strokeStyle='rgba(15,23,42,0.12)'; dctx.lineWidth=1; dctx.beginPath(); dctx.moveTo(drawC.width/2,0); dctx.lineTo(drawC.width/2,drawC.height); dctx.moveTo(0,drawC.height/2); dctx.lineTo(drawC.width,drawC.height/2); dctx.stroke();
-  // trail
-  if(state.trail.length>1){ dctx.beginPath(); const [sx,sy]=worldToCanvas(...state.trail[0]); dctx.moveTo(sx,sy); for(let i=1;i<state.trail.length;i++){ const [cx,cy]=worldToCanvas(...state.trail[i]); dctx.lineTo(cx,cy);} dctx.strokeStyle='#ff2d55'; dctx.lineWidth=3; dctx.stroke(); }
-  // ball
-  const [bx,by]=worldToCanvas(state.x,state.y); const grd=dctx.createRadialGradient(bx,by,2,bx,by,10); grd.addColorStop(0,'#fff'); grd.addColorStop(1,'#7c3aed'); dctx.fillStyle=grd; dctx.beginPath(); dctx.arc(bx,by,8,0,Math.PI*2); dctx.fill();
-  // gradient arrow
-  const {grad}=getFn()([state.x,state.y]); const scale=0.18; const [ax,ay]=worldToCanvas(state.x,state.y); const [ex,ey]=worldToCanvas(state.x-grad[0]*scale, state.y-grad[1]*scale); drawArrow(ax,ay,ex,ey,'#06b6d4');
-}
-function drawArrow(x1,y1,x2,y2,color){ const head=10; const ang=Math.atan2(y2-y1,x2-x1); dctx.strokeStyle=color; dctx.fillStyle=color; dctx.lineWidth=2; dctx.beginPath(); dctx.moveTo(x1,y1); dctx.lineTo(x2,y2); dctx.stroke(); dctx.beginPath(); dctx.moveTo(x2,y2); dctx.lineTo(x2-head*Math.cos(ang-0.3), y2-head*Math.sin(ang-0.3)); dctx.lineTo(x2-head*Math.cos(ang+0.3), y2-head*Math.sin(ang+0.3)); dctx.closePath(); dctx.fill(); }
-
-// ------------- Loss mini chart (axes + labels, no deps) -------------
-const lossCanvas=document.getElementById('lossCanvas');
-const lctx=lossCanvas.getContext('2d');
-function pushLoss(v){
-  const smooth=document.getElementById('smoothLoss').checked;
-  const last=lossHistory.length?lossHistory[lossHistory.length-1]:v;
-  const y=smooth?0.7*last+0.3*v:v;
-  lossHistory.push(y);
-  if(lossHistory.length>MAX_POINTS) lossHistory.shift();
-  updateLossChart();
-}
-function niceStep(span){
-  const pow = Math.pow(10, Math.floor(Math.log10(span)));
-  const f = span / pow;
-  let step;
-  if(f <= 1.5) step = 1;
-  else if(f <= 3) step = 2;
-  else if(f <= 7) step = 5;
-  else step = 10;
-  return step * pow;
-}
-function updateLossChart(){
-  const W = lossCanvas.clientWidth || lossCanvas.width;
-  const H = lossCanvas.clientHeight || lossCanvas.height;
-  if(lossCanvas.width!==W || lossCanvas.height!==H){ lossCanvas.width=W; lossCanvas.height=H; }
-  lctx.clearRect(0,0,W,H);
-  // Plot area
-  const M = {l:56, r:12, t:8, b:22};
-  const PW = Math.max(1, W - M.l - M.r);
-  const PH = Math.max(1, H - M.t - M.b);
-  // Data range
-  const log = document.getElementById('logScale').checked;
-  const eps = 1e-8;
-  const vals = lossHistory.length ? lossHistory : [0];
-  let min = Math.min(...vals), max = Math.max(...vals);
-  if(!isFinite(min) || !isFinite(max)) { min = 0; max = 1; }
-  let tmin = log ? Math.log(Math.max(eps, min||eps)) : min;
-  let tmax = log ? Math.log(Math.max(eps, max||eps)) : max;
-  let span = (tmax - tmin) || 1;
-  const zoom = parseFloat((document.getElementById('lossZoom')?.value) || '1');
-  const spanAdj = span / Math.max(zoom, 1e-6);
-  const ttop = tmin + spanAdj;
-  const yMap = (v)=>{
-    const tv = log ? Math.log(Math.max(eps, v||eps)) : v;
-    const tn = Math.min(1, Math.max(0, (tv - tmin) / spanAdj));
-    return M.t + (1 - tn) * PH;
-  };
-  // Axes
-  lctx.strokeStyle = '#94a3b8';
-  lctx.lineWidth = 1;
-  lctx.beginPath(); lctx.moveTo(M.l, M.t); lctx.lineTo(M.l, M.t+PH); lctx.stroke();
-  lctx.beginPath(); lctx.moveTo(M.l, M.t+PH); lctx.lineTo(M.l+PW, M.t+PH); lctx.stroke();
-  lctx.fillStyle = '#64748b';
-  lctx.font = '12px system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial';
-  // Y ticks
-  if(log){
-    const minExp = Math.floor(Math.log10(Math.max(eps, min||eps)));
-    const maxExp = Math.ceil(Math.log10(Math.max(eps, Math.min(Math.exp(ttop), Math.max(min, max)))));
-    for(let e=minExp; e<=maxExp; e++){
-      const val = Math.pow(10, e);
-      const y = yMap(val);
-      lctx.strokeStyle='#94a3b8'; lctx.beginPath(); lctx.moveTo(M.l-4, y); lctx.lineTo(M.l, y); lctx.stroke();
-      lctx.fillText(`1e${e}`, 4, y+4);
-      lctx.strokeStyle='rgba(100,116,139,0.15)'; lctx.beginPath(); lctx.moveTo(M.l+1, y); lctx.lineTo(M.l+PW, y); lctx.stroke();
+  function label(ctx, text, x, y, align) {
+    ctx.font = `500 ${view.px(11)}px ${MONO}`; ctx.textAlign = align || 'left'; ctx.textBaseline = 'middle';
+    ctx.lineJoin = 'round'; ctx.lineWidth = view.px(3); ctx.strokeStyle = SGLab.plot(); ctx.strokeText(text, x, y);
+    ctx.fillStyle = SGLab.ink(); ctx.fillText(text, x, y);
+  }
+  function drawLandscape() {
+    if (!field) return;
+    const canvas = $('landscape'), ctx = view.ctx, px = view.px;
+    const key = `${canvas.width}x${canvas.height}`;
+    if (key !== layerKey) { buildLayer(canvas.width, canvas.height); layerKey = key; }
+    view.begin();
+    ctx.save(); ctx.setTransform(1, 0, 0, 1, 0, 0); ctx.drawImage(layer, 0, 0); ctx.restore();
+    // Axes through the origin, with the range at the edges.
+    const [ox, oy] = toPlot(0, 0);
+    ctx.strokeStyle = 'rgba(244,243,239,.28)'; ctx.lineWidth = px(1); ctx.beginPath(); ctx.moveTo(ox, 0); ctx.lineTo(ox, SIZE); ctx.moveTo(0, oy); ctx.lineTo(SIZE, oy); ctx.stroke();
+    label(ctx, `x = ${R}`, SIZE - px(8), oy - px(10), 'right'); label(ctx, `y = ${R}`, ox + px(8), px(12));
+    // Known stationary points: a crosshair plus a text label, so they never depend on colour.
+    for (const [mx, my, name] of FUNCTIONS[$('fn').value].marks) {
+      if (Math.abs(mx) > R || Math.abs(my) > R) continue;
+      const [cx, cy] = toPlot(mx, my), a = px(7);
+      for (const [color, width] of [[SGLab.plot(), px(4)], [SGLab.ink(), px(1.6)]]) { ctx.strokeStyle = color; ctx.lineWidth = width; ctx.beginPath(); ctx.moveTo(cx - a, cy); ctx.lineTo(cx + a, cy); ctx.moveTo(cx, cy - a); ctx.lineTo(cx, cy + a); ctx.stroke(); }
+      label(ctx, name, cx + px(11), cy + px(12));
     }
-  } else {
-    const vMin = tmin, vMax = ttop;
-    const step = niceStep(vMax - vMin);
-    const start = Math.ceil(vMin/step)*step;
-    for(let v=start; v<=vMax+1e-9; v+=step){
-      const y = yMap(v);
-      lctx.strokeStyle='#94a3b8'; lctx.beginPath(); lctx.moveTo(M.l-4, y); lctx.lineTo(M.l, y); lctx.stroke();
-      lctx.fillText(v.toFixed(2), 4, y+4);
-      lctx.strokeStyle='rgba(100,116,139,0.15)'; lctx.beginPath(); lctx.moveTo(M.l+1, y); lctx.lineTo(M.l+PW, y); lctx.stroke();
+    const [sx, sy] = toPlot(start[0], start[1]);
+    ctx.strokeStyle = SGLab.plot(); ctx.lineWidth = px(4.5); ctx.beginPath(); ctx.arc(sx, sy, px(7), 0, Math.PI * 2); ctx.stroke();
+    ctx.strokeStyle = SGLab.ink(); ctx.lineWidth = px(1.8); ctx.stroke();
+    label(ctx, 'start', sx + px(12), sy - px(11));
+
+    ctx.lineJoin = ctx.lineCap = 'round';
+    for (const r of runners) {
+      if (r.trail.length > 1) {
+        // A casing in the surface colour keeps every path legible on any part of the ramp.
+        for (const [color, width] of [[SGLab.plot(), px(5)], [SGLab.color(r.slot), px(2.4)]]) {
+          ctx.strokeStyle = color; ctx.lineWidth = width; ctx.beginPath();
+          r.trail.forEach(([x, y], i) => { const [cx, cy] = toPlot(x, y); if (i) ctx.lineTo(cx, cy); else ctx.moveTo(cx, cy); });
+          ctx.stroke();
+        }
+      }
+    }
+    for (const r of runners) { const [bx, by] = toPlot(r.x, r.y); SGLab.marker(ctx, r.slot, bx, by, px(6.5), { ringWidth: px(2.2) }); }
+    // Steepest-descent direction for a lone optimizer. Drawn in ink, since it is not a series.
+    if (runners.length === 1 && runners[0].state === 'run') {
+      const r = runners[0], { grad } = fn()([r.x, r.y]), norm = Math.hypot(grad[0], grad[1]);
+      if (norm > 1e-9) {
+        const [ax, ay] = toPlot(r.x, r.y), len = Math.min(px(64), px(14) + norm * px(6)), ux = -grad[0] / norm, uy = grad[1] / norm;
+        const ex = ax + ux * len, ey = ay + uy * len, head = px(8), ang = Math.atan2(uy, ux);
+        ctx.strokeStyle = ctx.fillStyle = SGLab.ink(); ctx.lineWidth = px(1.8);
+        ctx.beginPath(); ctx.moveTo(ax + ux * px(9), ay + uy * px(9)); ctx.lineTo(ex, ey); ctx.stroke();
+        ctx.beginPath(); ctx.moveTo(ex + ux * head * .6, ey + uy * head * .6); ctx.lineTo(ex - head * Math.cos(ang - .45), ey - head * Math.sin(ang - .45)); ctx.lineTo(ex - head * Math.cos(ang + .45), ey - head * Math.sin(ang + .45)); ctx.closePath(); ctx.fill();
+      }
     }
   }
-  // X ticks (steps)
-  const xticks = 8;
-  const denom = Math.max(1, lossHistory.length-1);
-  for(let i=0;i<=xticks;i++){
-    const idx = Math.round(i * denom / xticks);
-    const x = M.l + (PW * (idx / Math.max(1, denom)));
-    lctx.strokeStyle='#94a3b8'; lctx.beginPath(); lctx.moveTo(x, M.t+PH); lctx.lineTo(x, M.t+PH+4); lctx.stroke();
-    lctx.fillText(String(idx), x-8, M.t+PH+16);
-  }
-  // Loss polyline
-  lctx.strokeStyle='#7c3aed'; lctx.lineWidth=2; lctx.beginPath();
-  for(let i=0;i<lossHistory.length;i++){
-    const x = M.l + PW * (i / Math.max(1, lossHistory.length-1));
-    const y = yMap(lossHistory[i]);
-    if(i===0) lctx.moveTo(x,y); else lctx.lineTo(x,y);
-  }
-  lctx.stroke();
-}
-// re-render when toggles change
-(document.getElementById('logScale'))?.addEventListener('change', updateLossChart);
-(document.getElementById('smoothLoss'))?.addEventListener('change', updateLossChart);
 
-// ------------- Canvas click to set start -------------
-drawC.addEventListener('click', (e)=>{ const r=drawC.getBoundingClientRect(); const x=e.clientX-r.left, y=e.clientY-r.top; [state.x,state.y]=canvasToWorld(x,y); resetSim(); renderFrame(); });
+  /* --------------------------------------------------------------- Loss chart */
+  const CW = 720, CH = 270;
+  const chart = SGLab.fitCanvas($('lossCanvas'), CW, CH, () => drawChart());
+  // Margins are set in on-screen pixels, so tick labels such as 1e-11 fit on a narrow plot too.
+  const margins = () => ({ l: Math.max(58, chart.px(48)), r: Math.max(16, chart.px(20)), t: 14, b: Math.max(30, chart.px(26)) });
+  function niceStep(span) { const pow = Math.pow(10, Math.floor(Math.log10(span))), f = span / pow; return (f <= 1.5 ? 1 : f <= 3 ? 2 : f <= 7 ? 5 : 10) * pow; }
+  // Smoothing is applied when drawing, from the raw values, so the switch acts on the whole curve.
+  function series(r) {
+    if (!$('smoothLoss').checked) return r.loss;
+    const out = new Array(r.loss.length); let last = r.loss[0];
+    for (let i = 0; i < r.loss.length; i++) { last = i ? 0.7 * last + 0.3 * r.loss[i] : r.loss[0]; out[i] = last; }
+    return out;
+  }
+  function drawChart() {
+    chart.begin();
+    const ctx = chart.ctx, px = chart.px, M = margins(), PW = CW - M.l - M.r, PH = CH - M.t - M.b;
+    const lines = runners.map(r => ({ r, data: series(r) }));
+    const all = lines.flatMap(l => l.data).filter(Number.isFinite);
+    let min = all.length ? Math.min(...all) : 0, max = all.length ? Math.max(...all) : 1;
+    // A log axis cannot show zero or negative loss (the saddle goes below zero), so it falls back.
+    const log = $('logScale').checked && min > 0;
+    $('chartNote').textContent = $('logScale').checked && !log ? 'This loss reaches zero or below, which a log axis cannot show, so the chart is linear for now.' : '';
+    const T = v => (log ? Math.log10(v) : v);
+    let tmin = T(min), tmax = T(max); if (!(tmax > tmin)) { tmax = tmin + 1; }
+    const spanAdj = (tmax - tmin) / Math.max(+$('lossZoom').value, 1e-6);
+    const yAt = v => M.t + (1 - Math.min(1, Math.max(0, (T(v) - tmin) / spanAdj))) * PH;
+    const count = Math.max(...lines.map(l => l.data.length), 1), xAt = i => M.l + PW * (count < 2 ? 0 : i / (count - 1));
 
-// ------------- Self tests -------------
-function runSelfTests(){ const b=document.getElementById('testBadge'); try{ sizeCanvases(); renderField(); resetSim(); stepOnce(); renderFrame(); if(!isFinite(worldToCanvas(0,0)[0])) throw new Error('non-finite coords'); b.textContent='Self‑tests: pass'; b.classList.add('test-pass'); }catch(err){ console.error(err); b.textContent='Self‑tests: fail'; b.classList.add('test-fail'); }}
+    ctx.font = `${px(11)}px ${MONO}`; ctx.lineWidth = px(1); ctx.textBaseline = 'middle'; ctx.textAlign = 'right';
+    const ticks = [];
+    if (log) { const lo = Math.floor(tmin), hi = Math.ceil(tmin + spanAdj), every = Math.max(1, Math.ceil((hi - lo) / 7)); for (let e = lo; e <= hi; e += every) ticks.push([Math.pow(10, e), `1e${e}`]); }
+    else { const stepSize = niceStep(spanAdj), first = Math.ceil(tmin / stepSize) * stepSize; for (let v = first; v <= tmin + spanAdj + 1e-9; v += stepSize) ticks.push([v, Math.abs(v) >= 1000 ? v.toExponential(1) : v.toFixed(stepSize < 1 ? 2 : 0)]); }
+    for (const [v, text] of ticks) {
+      const y = yAt(v); if (y < M.t - 1 || y > M.t + PH + 1) continue;
+      ctx.strokeStyle = SGLab.grid(); ctx.beginPath(); ctx.moveTo(M.l, y); ctx.lineTo(M.l + PW, y); ctx.stroke();
+      ctx.fillStyle = SGLab.muted(); ctx.fillText(text, M.l - px(8), y);
+    }
+    ctx.strokeStyle = SGLab.axis(); ctx.beginPath(); ctx.moveTo(M.l, M.t); ctx.lineTo(M.l, M.t + PH); ctx.lineTo(M.l + PW, M.t + PH); ctx.stroke();
+    ctx.textAlign = 'center'; ctx.textBaseline = 'top'; ctx.fillStyle = SGLab.muted();
+    for (let k = 0; k <= 6; k++) { const i = Math.round(k * (count - 1) / 6); ctx.fillText(String(i + offset), xAt(i), M.t + PH + px(8)); if (count < 2) break; }
+
+    ctx.save(); ctx.beginPath(); ctx.rect(M.l, M.t - 2, PW, PH + 4); ctx.clip();
+    ctx.lineWidth = px(2); ctx.lineJoin = 'round';
+    for (const { r, data } of lines) {
+      ctx.strokeStyle = SGLab.color(r.slot); ctx.beginPath();
+      data.forEach((v, i) => (i ? ctx.lineTo(xAt(i), yAt(v)) : ctx.moveTo(xAt(i), yAt(v))));
+      ctx.stroke();
+    }
+    ctx.restore();
+    for (const { r, data } of lines) if (data.length) SGLab.marker(ctx, r.slot, xAt(data.length - 1), yAt(data[data.length - 1]), px(4.5), { ringWidth: px(1.6) });
+    if (hoverStep >= 0 && hoverStep < count) { const x = xAt(hoverStep); ctx.strokeStyle = SGLab.faint(); ctx.lineWidth = px(1); ctx.beginPath(); ctx.moveTo(x, M.t); ctx.lineTo(x, M.t + PH); ctx.stroke(); }
+  }
+  $('lossCanvas').addEventListener('pointermove', event => {
+    const count = Math.max(...runners.map(r => r.loss.length), 1), p = chart.toLogical(event), M = margins();
+    hoverStep = Math.max(0, Math.min(count - 1, Math.round((p.x - M.l) / (CW - M.l - M.r) * (count - 1))));
+    drawChart();
+    const rows = runners.filter(r => hoverStep < r.loss.length).map(r => `<div class="tip-row"><i style="--c:${SGLab.color(r.slot)}"></i>${OPTIMIZERS[r.slot][1]}<span class="tip-muted">&nbsp;${format(series(r)[hoverStep])}</span></div>`).join('');
+    SGLab.tooltip.show(event.clientX, event.clientY, `<b>Step ${hoverStep + offset}</b>${rows}`);
+  });
+  $('lossCanvas').addEventListener('pointerleave', () => { hoverStep = -1; SGLab.tooltip.hide(); drawChart(); });
+
+  /* ---------------------------------------------------------------- Interface */
+  function setStatus(state, text) { SGLab.status($('status'), state, text); }
+  function format(v) { if (!Number.isFinite(v)) return '–'; const a = Math.abs(v); return a !== 0 && (a >= 1e5 || a < 1e-3) ? v.toExponential(2) : v.toFixed(a >= 100 ? 1 : 4); }
+  function renderLegend() {
+    const list = $('legend'); list.textContent = '';
+    for (const r of runners) {
+      const li = document.createElement('li'), sw = document.createElement('span'), val = document.createElement('span');
+      sw.className = 'swatch'; sw.style.setProperty('--c', SGLab.color(r.slot));
+      val.className = 'val'; val.textContent = r.state === 'diverged' ? 'diverged' : `f = ${format(r.loss[r.loss.length - 1])}${r.state === 'settled' ? ' · settled' : ''}`;
+      li.classList.toggle('is-off', r.state === 'diverged');
+      li.append(sw, OPTIMIZERS[r.slot][1], val); list.append(li);
+    }
+  }
+  function refresh() {
+    const lead = runners.find(r => r.key === $('opt').value) || runners[0];
+    if (lead) {
+      const here = fn()([lead.x, lead.y]);
+      $('stStep').textContent = steps; $('stX').textContent = lead.x.toFixed(3); $('stY').textContent = lead.y.toFixed(3);
+      $('stF').textContent = format(here.val); $('stG').textContent = format(Math.hypot(here.grad[0], here.grad[1]));
+    }
+    $('playLabel').textContent = running ? 'Pause' : steps ? 'Resume' : 'Play';
+    $('playIcon').setAttribute('d', running ? 'M7 5h3.5v14H7zm6.5 0H17v14h-3.5z' : 'M8 5v14l11-7z');
+    $('step').disabled = running;
+    renderLegend(); drawLandscape(); drawChart();
+  }
+  function renderScale() {
+    $('scaleBar').style.background = SGLab.rampCSS;
+    $('scaleLow').textContent = `low loss · ${format(field.min)}`;
+    $('scaleHigh').textContent = `${format(field.max)} · high loss${colourScale === 'log' ? ' (log)' : ''}`;
+  }
+  // Display settings repaint the surface and leave the run alone; a new function or range restarts it.
+  function repaint() { layerKey = ''; renderScale(); drawLandscape(); }
+  function rebuild(message) { computeField(); renderScale(); resetRun(message); }
+  function syncFields() {
+    const compare = mode === 'compare', type = $('opt').value;
+    $('opt').disabled = compare;
+    $('beta1').disabled = !compare && type === 'gd';
+    $('beta2').disabled = !compare && type !== 'adam';
+  }
+
+  [['lr', 3], ['beta1', 3], ['beta2', 3], ['noise', 3], ['gamma', 2]].forEach(([id, digits]) => $(id).addEventListener('input', () => { $(`${id}Out`).textContent = (+$(id).value).toFixed(digits); }));
+  $('gamma').addEventListener('input', repaint);
+  $('levels').addEventListener('input', () => { $('levelsOut').textContent = +$('levels').value || 'off'; repaint(); });
+  $('res').addEventListener('change', () => { computeField(); repaint(); });
+  $('fn').addEventListener('change', () => rebuild(`Switched to ${$('fn').selectedOptions[0].textContent.split(':')[0]}. Press Play.`));
+  $('opt').addEventListener('change', () => { syncFields(); resetRun(`${OPTIMIZERS[slotOf($('opt').value)][1]} selected. Press Play.`); });
+  [...$('range').children].forEach(b => b.addEventListener('click', () => {
+    R = +b.dataset.value; segValue('range', R);
+    start = [Math.max(-R, Math.min(R, start[0])), Math.max(-R, Math.min(R, start[1]))];
+    rebuild(`Showing x and y from ${-R} to ${R}.`);
+  }));
+  [...$('cscale').children].forEach(b => b.addEventListener('click', () => { colourScale = b.dataset.value; segValue('cscale', colourScale); repaint(); }));
+  [...$('mode').children].forEach(b => b.addEventListener('click', () => {
+    mode = b.dataset.value; segValue('mode', mode); syncFields();
+    resetRun(mode === 'compare' ? 'All four optimizers will start from the same point with the same settings. Press Play.' : 'Back to a single optimizer. Press Play.');
+  }));
+  $('randStart').addEventListener('click', () => { start = [(Math.random() * 2 - 1) * R, (Math.random() * 2 - 1) * R]; resetRun('New random start. Press Play.'); });
+  $('centerStart').addEventListener('click', () => { start = [0, 0]; resetRun(fn()([0, 0]).grad.every(g => g === 0) ? 'The gradient at the center is exactly zero, so nothing will move from here. Add noise or pick another start.' : 'Start moved to the center.'); });
+  $('play').addEventListener('click', play);
+  $('step').addEventListener('click', stepOnce);
+  $('reset').addEventListener('click', () => resetRun('Path cleared. The start point is unchanged.'));
+  ['logScale', 'smoothLoss'].forEach(id => $(id).addEventListener('change', drawChart));
+  $('lossZoom').addEventListener('input', () => { $('lossZoomOut').textContent = `${(+$('lossZoom').value).toFixed(1)}×`; drawChart(); });
+
+  $('landscape').addEventListener('click', event => {
+    const p = view.toLogical(event); start = toWorld(p.x, p.y);
+    resetRun(`Start set to (${start[0].toFixed(2)}, ${start[1].toFixed(2)}). Press Play.`);
+  });
+  $('landscape').addEventListener('pointermove', event => {
+    const p = view.toLogical(event), [x, y] = toWorld(p.x, p.y);
+    SGLab.tooltip.show(event.clientX, event.clientY, `<b>f = ${format(fn()([x, y]).val)}</b><div class="tip-muted">x ${x.toFixed(2)} · y ${y.toFixed(2)} · click to start here</div>`);
+  });
+  $('landscape').addEventListener('pointerleave', () => SGLab.tooltip.hide());
+  SGLab.onTheme(() => { layerKey = ''; refresh(); });
+
+  // Checks every analytic gradient against a central finite difference. It touches no run state.
+  function gradientCheck() {
+    let worst = 0;
+    for (const key of Object.keys(FUNCTIONS)) for (const p of [[0.3, -0.7], [-1.4, 1.1], [2.2, 0.4]]) {
+      const f = FUNCTIONS[key].f, h = 1e-5, g = f(p).grad;
+      const num = [(f([p[0] + h, p[1]]).val - f([p[0] - h, p[1]]).val) / (2 * h), (f([p[0], p[1] + h]).val - f([p[0], p[1] - h]).val) / (2 * h)];
+      worst = Math.max(worst, Math.hypot(g[0] - num[0], g[1] - num[1]) / Math.max(1, Math.hypot(num[0], num[1])));
+    }
+    return worst;
+  }
+  const worst = gradientCheck();
+  $('testChip').textContent = worst < 1e-5 ? 'Gradient check: pass' : 'Gradient check: FAIL';
+  $('testChip').title = `Largest relative gap between the analytic gradients and finite differences: ${worst.toExponential(1)}`;
+
+  $('levelsOut').textContent = $('levels').value;
+  syncFields();
+  computeField();
+  renderScale();
+  resetRun();
+  if (worst >= 1e-5) setStatus('error', 'An analytic gradient disagrees with its finite-difference check, so paths here may be wrong.');
+})();
 </script>
 </body>
 </html>

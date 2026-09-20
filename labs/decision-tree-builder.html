@@ -1,1213 +1,1288 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="en">
 <head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Decision Tree Builder</title>
-<script src="../assets/vendor/papaparse-5.4.1.min.js"></script>
-<script src="../assets/vendor/d3-7.8.5.min.js"></script>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Decision tree builder playground | Srinjoy Ghosh</title>
+<link rel="icon" type="image/svg+xml" href="../assets/favicon.svg">
+<link rel="stylesheet" href="../assets/lab.css">
+<script src="../assets/lab-bridge.js"></script>
 <style>
-:root {
-  --bg: #0b0f14;
-  --panel: #121821;
-  --panel-2: #0f141c;
-  --text: #e8eef6;
-  --muted: #9fb3c8;
-  --accent: #5ab0ff;
-  --accent-2: #8be9a0;
-  --warn: #ffb86b;
-  --danger: #ff6b6b;
-}
+  /* Tree plot: a pannable, zoomable SVG. Its height follows the width only, so an embedding frame never feeds back. */
+  #tree{height:clamp(340px,56vw,540px);cursor:grab;touch-action:none;-webkit-user-select:none;user-select:none}
+  #tree.is-panning{cursor:grabbing}
+  #tree text{pointer-events:none}
+  #tree .card{transition:stroke .2s}
+  #tree .node:not(.on-path):hover .card{stroke:var(--muted)}
+  /* Zoomed far out the labels cannot be read, so cards become blocks of their impurity colour. */
+  #tree.is-overview text,#tree.is-overview .marker{display:none}
+  #tree.is-overview .card{fill:var(--imp);vector-effect:non-scaling-stroke}
+  #tree.is-overview .link{vector-effect:non-scaling-stroke;stroke-width:1.2px}
+  #tree.is-overview .link.on-path{stroke-width:2.6px}
 
-* {
-  margin: 0;
-  padding: 0;
-  box-sizing: border-box;
-}
+  .plot-chips{position:absolute;top:12px;left:12px;right:168px;pointer-events:none}
+  .plot-chips .chip{background:rgba(11,13,22,.88)}
+  .chip.keep-case{display:inline-block;max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;letter-spacing:.02em;text-transform:none}
+  .plot-tools{position:absolute;top:10px;right:10px;display:flex;gap:2px;padding:3px;border-radius:999px;background:rgba(18,20,31,.94);box-shadow:inset 0 0 0 1px var(--line-strong)}
+  .plot-tools button{display:inline-flex;align-items:center;justify-content:center;gap:6px;min-width:34px;height:34px;padding:0 9px;border:0;border-radius:999px;font-size:13px;font-weight:500;color:var(--muted);background:none;transition:color .2s,background .2s}
+  .plot-tools button:hover{color:var(--ink);background:rgba(255,255,255,.1)}
+  .plot-tools button:disabled{opacity:.4;cursor:not-allowed}
+  .plot-tools svg{width:15px;height:15px}
+  .plot-tools .fit{padding:0 14px 0 11px}
+  .plot-hint{position:absolute;left:14px;right:14px;bottom:10px;font-size:12px;color:var(--faint);pointer-events:none}
+  .plot-hint .touch{display:none}
+  @media(hover:none),(pointer:coarse){.plot-hint .mouse{display:none}.plot-hint .touch{display:inline}.plot-tools button{min-width:40px;height:40px}}
 
-body {
-  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
-  font-size: 14px;
-  background: var(--bg);
-  color: var(--text);
-  overflow: hidden;
-}
+  .tree-key{display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:14px 32px;padding:6px 20px 16px}
+  .tree-key .legend svg{flex:none;width:16px;height:16px;overflow:visible}
+  .tree-key .legend svg.wide{width:30px}
+  .tree-key .scale{flex:1 1 240px;max-width:340px}
+  .tree-stats{grid-template-columns:repeat(4,minmax(0,1fr));margin:0 12px 12px}
 
-#app {
-  display: flex;
-  flex-direction: column;
-  height: 100vh;
-  width: 100vw;
-}
+  /* Data source panes and the dataset message */
+  .pane{display:grid;gap:12px}
+  .seg>button:disabled{opacity:.45;cursor:not-allowed}
+  .data-msg{display:flex;align-items:flex-start;gap:10px;padding:10px 12px;border-radius:var(--radius-sm);font-size:13px;line-height:1.5;color:var(--muted);background:rgba(255,255,255,.035);box-shadow:inset 0 0 0 1px var(--line);overflow-wrap:anywhere}
+  .data-msg::before{content:'';flex:none;display:grid;place-items:center;width:16px;height:16px;margin-top:2px;border-radius:50%;font:700 10px/1 var(--sans);color:#05060b;background:var(--faint)}
+  .data-msg[data-state=done]::before{content:'✓';background:var(--good)}
+  .data-msg[data-state=warn]::before{content:'!';background:var(--warning)}
+  .data-msg[data-state=error]{color:var(--ink);box-shadow:inset 0 0 0 1px color-mix(in srgb,var(--critical) 60%,transparent)}
+  .data-msg[data-state=error]::before{content:'×';font-size:13px;color:#fff;background:var(--critical)}
+  input[aria-invalid=true]{box-shadow:inset 0 0 0 1px var(--critical)}
 
-#header {
-  position: sticky;
-  top: 0;
-  background: var(--panel);
-  border-bottom: 1px solid #1a2536;
-  padding: 16px 24px;
-  z-index: 100;
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  flex-wrap: wrap;
-  gap: 12px;
-  flex-shrink: 0;
-}
+  /* Row trace readout */
+  .trace{display:grid;gap:10px;padding:14px;border-radius:var(--radius-sm);background:rgba(255,255,255,.035);box-shadow:inset 0 0 0 1px var(--line)}
+  .trace-summary{font-size:13.5px;line-height:1.55;color:var(--muted);overflow-wrap:anywhere}
+  .trace-summary b{font-weight:550;color:var(--ink)}
+  .trace-steps{display:grid;margin:0;padding:0;list-style:none;font-size:12.5px}
+  .trace-steps li{display:grid;grid-template-columns:18px minmax(0,1fr) auto;align-items:baseline;gap:4px 10px;padding:8px 0;border-top:1px solid var(--line)}
+  .trace-steps .n{font:11px var(--mono);color:var(--faint)}
+  .trace-steps .rule{color:var(--ink);overflow-wrap:anywhere}
+  .trace-steps .went{max-width:130px;font:11.5px var(--mono);text-align:right;color:var(--muted);overflow-wrap:anywhere}
+  .trace-steps .went b{font-weight:500;color:var(--ink)}
+  details.group .explain{display:grid;gap:10px;margin-top:16px}
 
-#header h1 {
-  font-size: 18px;
-  font-weight: 600;
-  color: var(--text);
-}
+  /* Data preview */
+  .preview-note{display:flex;flex-wrap:wrap;justify-content:space-between;gap:4px 16px;margin-bottom:12px}
+  .table-wrap{max-height:312px}
+  #preview tbody tr{cursor:pointer}
+  #preview th small{display:block;margin-top:3px;font:400 10.5px/1.2 var(--mono);letter-spacing:.04em;text-transform:none;color:var(--faint)}
+  #preview th.is-target{color:var(--ink);box-shadow:inset 0 -2px 0 var(--a3)}
+  #preview .idx{width:1%;padding-right:4px}
+  #preview td.missing{color:var(--faint)}
+  .row-pick{min-width:40px;height:26px;padding:0 10px;border:0;border-radius:999px;font:500 12px var(--mono);color:var(--muted);background:rgba(255,255,255,.06);box-shadow:inset 0 0 0 1px var(--line);transition:color .2s,background .2s,box-shadow .2s}
+  #preview tbody tr:hover .row-pick{color:var(--ink);box-shadow:inset 0 0 0 1px var(--line-strong)}
+  #preview tr.is-traced td{background:color-mix(in srgb,var(--a3) 10%,transparent)}
+  #preview tr.is-traced .row-pick{color:#05060b;background:var(--a3);box-shadow:none}
 
-.badges {
-  display: flex;
-  gap: 8px;
-  flex-wrap: wrap;
-}
+  /* Tooltip body */
+  .lab-tip .tip-kv{display:grid;gap:2px;margin:6px 0 0}
+  .lab-tip .tip-kv div{display:flex;justify-content:space-between;gap:18px}
+  .lab-tip .tip-kv dt{color:var(--muted)}
+  .lab-tip .tip-kv dd{margin:0;font:12px var(--mono)}
+  .lab-tip .tip-dist{display:grid;gap:6px;margin-top:8px;padding-top:8px;border-top:1px solid var(--line)}
+  .lab-tip .tip-bar{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:3px 12px;font-size:12px}
+  .lab-tip .tip-bar span:first-child{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .lab-tip .tip-bar span:last-child{font-family:var(--mono);color:var(--muted)}
+  .lab-tip .tip-bar i{grid-column:1/-1;height:3px;min-width:2px;border-radius:2px;background:var(--muted)}
 
-.badge {
-  padding: 4px 10px;
-  border-radius: 6px;
-  font-size: 11px;
-  font-weight: 500;
-  background: var(--panel-2);
-  border: 1px solid #1a2536;
-  color: var(--muted);
-  white-space: nowrap;
-}
-
-.badge.task {
-  background: var(--accent);
-  color: var(--bg);
-  border-color: var(--accent);
-}
-
-#content {
-  display: flex;
-  flex: 1;
-  overflow: hidden;
-  min-height: 0;
-}
-
-#controls {
-  width: 330px;
-  flex-shrink: 0;
-  background: var(--panel);
-  border-right: 1px solid #1a2536;
-  overflow-y: auto;
-  padding: 20px;
-}
-
-#viz {
-  flex: 1;
-  display: flex;
-  flex-direction: column;
-  overflow: hidden;
-  min-width: 0;
-}
-
-.panel {
-  background: var(--panel);
-  border: 1px solid #1a2536;
-  border-radius: 14px;
-  padding: 16px;
-  box-shadow: inset 0 1px 2px rgba(0,0,0,0.1);
-  margin-bottom: 16px;
-}
-
-.panel h3 {
-  font-size: 13px;
-  font-weight: 600;
-  color: var(--accent);
-  margin-bottom: 12px;
-  text-transform: uppercase;
-  letter-spacing: 0.5px;
-}
-
-.form-group {
-  margin-bottom: 14px;
-}
-
-label {
-  display: block;
-  font-size: 12px;
-  font-weight: 500;
-  color: var(--muted);
-  margin-bottom: 6px;
-}
-
-input[type="file"],
-input[type="number"],
-select,
-textarea {
-  width: 100%;
-  background: var(--panel-2);
-  border: 1px solid #1a2536;
-  border-radius: 10px;
-  padding: 10px 12px;
-  color: var(--text);
-  font-size: 13px;
-  font-family: inherit;
-  transition: all 0.2s;
-}
-
-input:focus,
-select:focus,
-textarea:focus {
-  outline: none;
-  border-color: var(--accent);
-  box-shadow: 0 0 0 3px rgba(90, 176, 255, 0.1);
-}
-
-textarea {
-  resize: vertical;
-  min-height: 80px;
-  font-family: 'Courier New', monospace;
-  font-size: 11px;
-}
-
-.hint {
-  font-size: 11px;
-  color: var(--muted);
-  margin-top: 4px;
-  font-style: italic;
-}
-
-.settings-grid {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 12px;
-  margin-bottom: 14px;
-}
-
-.settings-grid .form-group {
-  margin-bottom: 0;
-}
-
-button {
-  width: 100%;
-  padding: 11px 16px;
-  border: none;
-  border-radius: 10px;
-  font-size: 13px;
-  font-weight: 600;
-  cursor: pointer;
-  transition: all 0.2s;
-  font-family: inherit;
-}
-
-button.primary {
-  background: linear-gradient(135deg, var(--accent) 0%, #4a9fe8 100%);
-  color: white;
-  margin-bottom: 8px;
-}
-
-button.primary:hover {
-  transform: translateY(-1px);
-  box-shadow: 0 4px 12px rgba(90, 176, 255, 0.3);
-}
-
-button.secondary {
-  background: var(--panel-2);
-  color: var(--text);
-  border: 1px solid #1a2536;
-}
-
-button.secondary:hover {
-  background: #171d2a;
-  border-color: var(--accent);
-}
-
-button:disabled {
-  opacity: 0.5;
-  cursor: not-allowed;
-}
-
-details {
-  background: var(--panel-2);
-  border: 1px solid #1a2536;
-  border-radius: 10px;
-  padding: 12px;
-  margin-top: 16px;
-}
-
-summary {
-  cursor: pointer;
-  font-weight: 600;
-  font-size: 12px;
-  color: var(--accent);
-  user-select: none;
-}
-
-details[open] summary {
-  margin-bottom: 12px;
-}
-
-.footer-tip {
-  margin-top: 16px;
-  padding: 12px;
-  background: var(--panel-2);
-  border-radius: 10px;
-  font-size: 11px;
-  color: var(--muted);
-  line-height: 1.5;
-}
-
-#viz-toolbar {
-  padding: 16px 24px;
-  background: var(--panel);
-  border-bottom: 1px solid #1a2536;
-  font-size: 12px;
-  color: var(--muted);
-  flex-shrink: 0;
-}
-
-#tree-container {
-  flex: 1;
-  overflow: auto;
-  background: var(--bg);
-  position: relative;
-  min-height: 0;
-}
-
-#tree {
-  display: block;
-}
-
-#preview-container {
-  height: 250px;
-  flex-shrink: 0;
-  overflow: auto;
-  background: var(--panel);
-  border-top: 1px solid #1a2536;
-}
-
-table {
-  width: 100%;
-  border-collapse: collapse;
-  font-size: 12px;
-}
-
-thead {
-  position: sticky;
-  top: 0;
-  background: var(--panel-2);
-  z-index: 10;
-}
-
-th {
-  padding: 10px 12px;
-  text-align: left;
-  font-weight: 600;
-  color: var(--accent);
-  border-bottom: 2px solid #1a2536;
-}
-
-td {
-  padding: 8px 12px;
-  border-bottom: 1px solid #1a2536;
-  color: var(--text);
-}
-
-tr:hover td {
-  background: var(--panel-2);
-}
-
-.tooltip {
-  position: fixed;
-  background: rgba(18, 24, 33, 0.98);
-  border: 1px solid var(--accent);
-  border-radius: 8px;
-  padding: 10px 12px;
-  font-size: 11px;
-  pointer-events: none;
-  z-index: 1000;
-  max-width: 300px;
-  box-shadow: 0 8px 24px rgba(0,0,0,0.4);
-  display: none;
-}
-
-.tooltip-row {
-  margin: 3px 0;
-  color: var(--text);
-}
-
-.tooltip-label {
-  color: var(--muted);
-  font-weight: 600;
-}
-
-svg {
-  display: block;
-}
-
-.node circle {
-  stroke: #2a3a52;
-  stroke-width: 2.5;
-  cursor: pointer;
-  transition: all 0.2s;
-}
-
-.node circle:hover {
-  stroke: var(--accent);
-  stroke-width: 3;
-}
-
-.node text {
-  font-size: 12px;
-  fill: var(--text);
-  pointer-events: none;
-}
-
-.node text.label {
-  font-weight: 600;
-}
-
-.node text.sublabel {
-  fill: var(--muted);
-  font-size: 11px;
-}
-
-.link {
-  fill: none;
-  stroke: #2a3a52;
-  stroke-width: 2;
-  opacity: 0.6;
-}
-
-.highlighted {
-  stroke: var(--accent-2) !important;
-  stroke-width: 4 !important;
-  opacity: 1 !important;
-  filter: drop-shadow(0 0 8px var(--accent-2));
-}
-
-.highlighted-node circle {
-  stroke: var(--accent-2) !important;
-  stroke-width: 4 !important;
-  filter: drop-shadow(0 0 8px var(--accent-2));
-}
+  @media(max-width:1040px) and (min-width:861px){.tree-stats{grid-template-columns:repeat(2,minmax(0,1fr))}}
+  @media(max-width:560px){
+    .tree-stats{grid-template-columns:repeat(2,minmax(0,1fr));margin:0 8px 8px}
+    .tree-key{padding:4px 16px 14px}
+    .toolbar>#build{flex-basis:100%}
+    .plot-chips{right:12px;top:54px}
+  }
 </style>
-<link rel="stylesheet" href="../assets/lab-theme.css">
-<script defer src="../assets/lab-bridge.js"></script>
 </head>
 <body>
-<aside class="sg-context-note">CSV processing happens in your browser. This page does not upload your dataset.</aside>
+<div class="lab">
+  <header class="lab-head">
+    <div><a class="lab-back" href="../spaces/decision-tree-builder/index.html">&larr; Back to portfolio</a><h1>Decision tree builder</h1></div>
+    <div class="chip-row"><span class="chip">CART splits</span><span class="chip">Gini / entropy / MSE</span><span class="chip">Numeric + categorical</span></div>
+  </header>
 
-<div id="app">
-  <div id="header">
-    <h1>Decision Tree Builder · Interactive</h1>
-    <div class="badges">
-      <span class="badge task" id="task-badge">Classification</span>
-      <span class="badge">Node color = impurity</span>
-      <span class="badge">Numeric + Categorical</span>
-      <span class="badge">Path highlighting</span>
-    </div>
-  </div>
+  <aside class="lab-note">CSV processing happens in your browser. This page does not upload your dataset.</aside>
 
-  <div id="content">
-    <div id="controls">
-      <div class="panel">
-        <h3>Upload CSV</h3>
-        <div class="form-group">
-          <input type="file" id="file-input" accept=".csv">
-          <div class="hint">Header row required. Missing values ignored per split.</div>
+  <div class="lab-app">
+    <aside class="lab-side">
+      <section class="group" aria-labelledby="g-data">
+        <h2 class="group-title" id="g-data">Data</h2>
+        <div class="seg" role="group" aria-label="Data source">
+          <button type="button" data-source="sample" aria-pressed="true">Sample</button>
+          <button type="button" data-source="upload" aria-pressed="false">Upload</button>
+          <button type="button" data-source="paste" aria-pressed="false">Paste</button>
         </div>
-      </div>
-
-      <div class="panel">
-        <h3>Paste CSV</h3>
-        <div class="form-group">
-          <textarea id="paste-area" placeholder="Paste CSV data here..."></textarea>
-        </div>
-        <button class="secondary" id="load-paste">Load Pasted CSV</button>
-      </div>
-
-      <div class="panel">
-        <h3>Target Column</h3>
-        <div class="form-group">
-          <select id="target-select">
-            <option value="">Select target...</option>
-          </select>
-        </div>
-      </div>
-
-      <div class="panel">
-        <h3>Settings</h3>
-        <div class="settings-grid">
-          <div class="form-group">
-            <label for="criterion">Criterion</label>
-            <select id="criterion">
-              <option value="gini">Gini</option>
-              <option value="entropy">Entropy</option>
+        <div class="pane" id="pane-sample">
+          <div class="field">
+            <label for="sampleSelect">Sample dataset</label>
+            <select id="sampleSelect">
+              <option value="iris">Iris flowers: classification</option>
+              <option value="tennis">Play tennis: categorical features</option>
+              <option value="houses">House prices: regression (synthetic)</option>
             </select>
+            <p class="hint" id="sampleHint"></p>
           </div>
-          <div class="form-group">
-            <label for="max-depth">Max Depth</label>
-            <input type="number" id="max-depth" value="4" min="1" max="30">
-          </div>
-          <div class="form-group">
-            <label for="min-split">Min Split</label>
-            <input type="number" id="min-split" value="2" min="2">
-          </div>
-          <div class="form-group">
-            <label for="min-gain">Min Gain</label>
-            <input type="number" id="min-gain" value="0" step="0.0001">
+          <button class="btn btn-block" type="button" id="loadSample">Load sample</button>
+        </div>
+        <div class="pane" id="pane-upload" hidden>
+          <div class="field">
+            <label for="fileInput">CSV file</label>
+            <input type="file" id="fileInput" accept=".csv,.tsv,.txt,text/csv,text/plain">
+            <p class="hint">The first line must name the columns. You can also drop a file anywhere on this page. It is read here and never sent anywhere.</p>
           </div>
         </div>
-        <div class="hint">Criterion used only for categorical targets. Numeric targets use MSE.</div>
-      </div>
-
-      <button class="primary" id="build-btn">Build Tree</button>
-      <button class="secondary" id="export-svg">Export SVG</button>
-      <button class="secondary" id="export-json">Export JSON</button>
-
-      <details>
-        <summary>Inspect a Row</summary>
-        <div class="form-group">
-          <label for="row-index">Row Index (0-based)</label>
-          <input type="number" id="row-index" value="0" min="0">
+        <div class="pane" id="pane-paste" hidden>
+          <div class="field">
+            <label for="pasteArea">CSV text</label>
+            <textarea id="pasteArea" rows="6" spellcheck="false" autocomplete="off" placeholder="outlook,humidity,play&#10;sunny,high,no&#10;overcast,normal,yes"></textarea>
+            <p class="hint">Header row first, then one line per example. Commas, semicolons and tabs all work.</p>
+          </div>
+          <button class="btn btn-block" type="button" id="loadPaste">Load pasted CSV</button>
         </div>
-        <button class="secondary" id="highlight-path">Highlight Path</button>
+        <p class="data-msg" id="dataMsg" data-state="idle">Loading the sample data.</p>
+      </section>
+
+      <section class="group" aria-labelledby="g-model">
+        <h2 class="group-title" id="g-model">Target and settings</h2>
+        <div class="field">
+          <label for="targetSelect">Target column</label><output id="taskValue" for="targetSelect">&ndash;</output>
+          <select id="targetSelect"></select>
+          <p class="hint">Text targets are classified. A numeric target with more than 12 distinct values becomes a regression.</p>
+        </div>
+        <div class="field">
+          <span class="label" id="critLabel">Split criterion</span><output id="critValue">Gini</output>
+          <div class="seg" role="group" aria-labelledby="critLabel">
+            <button type="button" data-criterion="gini" aria-pressed="true">Gini</button>
+            <button type="button" data-criterion="entropy" aria-pressed="false">Entropy</button>
+          </div>
+          <p class="hint" id="critHint">Both measure how mixed the classes in a node are.</p>
+        </div>
+        <div class="field">
+          <label for="maxDepth">Max depth</label><output id="maxDepthValue" for="maxDepth">4</output>
+          <input type="range" id="maxDepth" min="1" max="30" value="4">
+        </div>
+        <div class="field-pair">
+          <div class="field"><label for="minSplit">Min split</label><input type="number" id="minSplit" value="2" min="2" step="1" inputmode="numeric"></div>
+          <div class="field"><label for="minGain">Min gain</label><input type="number" id="minGain" value="0" min="0" step="0.001" inputmode="decimal"></div>
+        </div>
+        <p class="hint">Min split is the fewest rows a node needs before it may split. Min gain is the smallest impurity drop worth a split. The tree rebuilds as you change a setting.</p>
+      </section>
+
+      <section class="group" aria-labelledby="g-inspect">
+        <h2 class="group-title" id="g-inspect">Inspect a row</h2>
+        <div class="field">
+          <label for="rowIndex">Row number</label><output id="rowRange" for="rowIndex">&ndash;</output>
+          <input type="number" id="rowIndex" value="1" min="1" step="1" inputmode="numeric">
+        </div>
+        <div class="btn-row">
+          <button class="btn" type="button" id="tracePath"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 6h5a4 4 0 0 1 4 4v4a4 4 0 0 0 4 4h3m-3-3 3 3-3 3"/></svg>Trace path</button>
+          <button class="btn btn-ghost" type="button" id="clearPath" disabled>Clear</button>
+        </div>
+        <div class="trace" id="traceOut" hidden>
+          <p class="trace-summary" id="traceSummary"></p>
+          <ol class="trace-steps" id="traceSteps"></ol>
+        </div>
+        <p class="hint">Or click any row in the data preview. The trace lists every decision the row meets on its way to a leaf.</p>
+      </section>
+
+      <details class="group">
+        <summary class="group-title">How the tree is grown</summary>
+        <div class="explain">
+          <p><strong>Greedy CART-style splitting.</strong> At each node the builder tries every feature, keeps the single split with the largest impurity drop (the gain), then repeats on both halves. It never revisits an earlier choice.</p>
+          <p><strong>Two kinds of question.</strong> Numeric features are cut at midpoints between neighbouring values. Categorical features test one category against all the others.</p>
+          <p><strong>Impurity.</strong> Gini or entropy for classification, mean squared error for regression. A pure node scores 0.</p>
+          <p><strong>Stopping.</strong> A node becomes a leaf at max depth, below min split rows, when the best gain is under min gain, or when it is already pure.</p>
+          <p><strong>Missing values.</strong> Empty cells count as missing. A row missing the split feature is left out of both branches while training, and follows the no branch when traced.</p>
+        </div>
       </details>
+    </aside>
 
-      <div class="footer-tip">
-        <strong>Task Type:</strong> Classification when target is categorical. Regression when target is numeric with >12 unique values.
+    <main class="lab-stage">
+      <div class="panel">
+        <div class="panel-head">
+          <h2>Decision tree</h2>
+          <div class="toolbar">
+            <button class="btn btn-primary" type="button" id="build"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3.5V10M6 20v-6a4 4 0 0 1 4-4h4a4 4 0 0 1 4 4v6"/></svg><span id="buildLabel">Build tree</span></button>
+            <button class="btn" type="button" id="exportSvg"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 4v11m0 0-4-4m4 4 4-4M5 19h14"/></svg>Export SVG</button>
+            <button class="btn" type="button" id="exportJson"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 4v11m0 0-4-4m4 4 4-4M5 19h14"/></svg>Export JSON</button>
+          </div>
+        </div>
+        <div class="plot">
+          <svg id="tree" role="img" aria-label="Decision tree diagram. The sample tree is being built."></svg>
+          <div class="plot-empty" id="plotEmpty" hidden></div>
+          <div class="plot-chips chip-row" id="plotChips"></div>
+          <div class="plot-tools" role="group" aria-label="Zoom controls">
+            <button type="button" id="zoomOut" aria-label="Zoom out" title="Zoom out"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M6 12h12"/></svg></button>
+            <button type="button" id="zoomIn" aria-label="Zoom in" title="Zoom in"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M12 6v12M6 12h12"/></svg></button>
+            <button type="button" class="fit" id="fit" title="Fit the whole tree in view"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 9V5h4M20 9V5h-4M4 15v4h4M20 15v4h-4"/></svg>Fit</button>
+          </div>
+          <p class="plot-hint" id="plotHint"><span class="mouse">Drag to pan. Ctrl + scroll or pinch to zoom.</span><span class="touch">Drag to pan. Pinch to zoom.</span></p>
+        </div>
+        <div class="tree-key">
+          <ul class="legend" aria-label="Tree legend">
+            <li><svg viewBox="0 0 16 16" aria-hidden="true"><rect x="2" y="2" width="12" height="12" rx="3.2" fill="#256abf" stroke="#8fb8ef" stroke-width="1.5"/></svg>Split</li>
+            <li><svg viewBox="0 0 16 16" aria-hidden="true"><circle cx="8" cy="8" r="6.2" fill="#256abf" stroke="#8fb8ef" stroke-width="1.5"/></svg>Leaf</li>
+            <li><svg class="wide" viewBox="0 0 30 16" aria-hidden="true"><path d="M1 3h28" stroke="#4a5275" stroke-width="5" stroke-linecap="round"/><path d="M1 13h28" stroke="#4a5275" stroke-width="1.5" stroke-linecap="round"/></svg>Link width: rows on the branch</li>
+            <li><svg class="wide" viewBox="0 0 30 16" aria-hidden="true"><path d="M1 8h28" stroke="var(--a3)" stroke-width="3.5" stroke-linecap="round"/></svg>Traced row</li>
+          </ul>
+          <div class="scale" id="impurityScale">
+            <span id="scaleTitle">Node colour: impurity</span>
+            <div class="scale-bar" id="scaleBar"></div>
+            <div class="scale-ends"><span id="scaleLow">0 (pure)</span><span id="scaleHigh">most mixed</span></div>
+          </div>
+        </div>
+        <div class="stat-grid tree-stats">
+          <div class="stat"><span class="stat-label">Depth</span><span class="stat-value" id="statDepth">&ndash;</span></div>
+          <div class="stat"><span class="stat-label">Nodes</span><span class="stat-value" id="statNodes">&ndash;</span></div>
+          <div class="stat"><span class="stat-label">Leaves</span><span class="stat-value" id="statLeaves">&ndash;</span></div>
+          <div class="stat"><span class="stat-label" id="statFitLabel">Training accuracy</span><span class="stat-value" id="statFit">&ndash;</span></div>
+        </div>
+        <div class="statusbar" id="mainStatus" role="status" aria-live="polite" data-state="running">Building the sample tree.</div>
       </div>
-    </div>
 
-    <div id="viz">
-      <div id="viz-toolbar">
-        <span id="status">Load a dataset to begin</span>
+      <div class="panel">
+        <div class="panel-head">
+          <h2>Data preview</h2>
+          <div class="chip-row"><span class="chip" id="rowsChip">0 rows</span><span class="chip" id="colsChip">0 columns</span></div>
+        </div>
+        <div class="panel-body">
+          <div class="preview-note"><p class="hint">Click a row to trace its path through the tree.</p><p class="hint" id="previewCount"></p></div>
+          <div class="table-wrap" id="tableWrap" tabindex="0" role="region" aria-label="Data preview table">
+            <table id="preview"><thead id="previewHead"></thead><tbody id="previewBody"></tbody></table>
+          </div>
+        </div>
       </div>
-      <div id="tree-container">
-        <svg id="tree"></svg>
-      </div>
-      <div id="preview-container">
-        <table id="preview-table">
-          <thead></thead>
-          <tbody></tbody>
-        </table>
-      </div>
-    </div>
+    </main>
   </div>
 </div>
 
-<div class="tooltip" id="tooltip"></div>
-
+<script src="../assets/vendor/papaparse-5.4.1.min.js"></script>
+<script src="../assets/vendor/d3-7.8.5.min.js"></script>
 <script>
-// Demo data
-const DEMO_CSV = `sepal_length,sepal_width,petal_length,petal_width,species
-5.1,3.5,1.4,0.2,setosa
-4.9,3.0,1.4,0.2,setosa
-5.8,2.7,5.1,1.9,virginica
-6.0,2.7,5.1,1.6,virginica
-6.3,3.3,4.7,1.6,versicolor
-6.4,3.2,4.5,1.5,versicolor
-5.0,3.4,1.5,0.2,setosa
-4.7,3.2,1.3,0.2,setosa
-6.7,3.1,4.4,1.4,versicolor
-5.5,2.3,4.0,1.3,versicolor
-6.5,3.0,5.8,2.2,virginica
-7.7,3.8,6.7,2.2,virginica`;
+(() => {
+  'use strict';
+  const $ = id => document.getElementById(id);
+  const esc = SGLab.escapeHTML;
+  const integer = new Intl.NumberFormat('en');
+  const SANS = "Geist, system-ui, -apple-system, 'Segoe UI', sans-serif";
+  const MONO = "'Geist Mono', ui-monospace, 'Cascadia Code', Consolas, monospace";
+  const TITLE_FONT = `600 13px ${SANS}`;
+  const SUB_FONT = `400 10.5px ${MONO}`;
+  const CARD_H = 46;          // node card height
+  const ROW = 58;             // vertical pitch between neighbouring leaves
+  const GAP = 44;             // horizontal room for the links between two depth columns
+  const PREVIEW_ROWS = 200;
+  const MAX_FILE_MB = 20;
+  const OVERVIEW_BELOW = .45; // zoom level under which labels are hidden
 
-// State
-let dataset = [];
-let headers = [];
-let target = '';
-let task = 'classification';
-let types = {};
-let tree = null;
-let treeData = null;
+  /* ------------------------------------------------------------ Sample data */
+  const IRIS = {
+    setosa: '5.1,3.5,1.4,0.2 4.9,3.0,1.4,0.2 4.7,3.2,1.3,0.2 4.6,3.1,1.5,0.2 5.0,3.6,1.4,0.2 5.4,3.9,1.7,0.4 4.6,3.4,1.4,0.3 5.0,3.4,1.5,0.2 4.4,2.9,1.4,0.2 4.9,3.1,1.5,0.1 5.4,3.7,1.5,0.2 4.8,3.4,1.6,0.2 4.8,3.0,1.4,0.1 4.3,3.0,1.1,0.1 5.8,4.0,1.2,0.2 5.7,4.4,1.5,0.4 5.4,3.9,1.3,0.4 5.1,3.5,1.4,0.3 5.7,3.8,1.7,0.3 5.1,3.8,1.5,0.3 5.4,3.4,1.7,0.2 5.1,3.7,1.5,0.4 4.6,3.6,1.0,0.2 5.1,3.3,1.7,0.5 4.8,3.4,1.9,0.2 5.0,3.0,1.6,0.2 5.0,3.4,1.6,0.4 5.2,3.5,1.5,0.2 5.2,3.4,1.4,0.2 4.7,3.2,1.6,0.2 4.8,3.1,1.6,0.2 5.4,3.4,1.5,0.4 5.2,4.1,1.5,0.1 5.5,4.2,1.4,0.2 4.9,3.1,1.5,0.2 5.0,3.2,1.2,0.2 5.5,3.5,1.3,0.2 4.9,3.6,1.4,0.1 4.4,3.0,1.3,0.2 5.1,3.4,1.5,0.2 5.0,3.5,1.3,0.3 4.5,2.3,1.3,0.3 4.4,3.2,1.3,0.2 5.0,3.5,1.6,0.6 5.1,3.8,1.9,0.4 4.8,3.0,1.4,0.3 5.1,3.8,1.6,0.2 4.6,3.2,1.4,0.2 5.3,3.7,1.5,0.2 5.0,3.3,1.4,0.2',
+    versicolor: '7.0,3.2,4.7,1.4 6.4,3.2,4.5,1.5 6.9,3.1,4.9,1.5 5.5,2.3,4.0,1.3 6.5,2.8,4.6,1.5 5.7,2.8,4.5,1.3 6.3,3.3,4.7,1.6 4.9,2.4,3.3,1.0 6.6,2.9,4.6,1.3 5.2,2.7,3.9,1.4 5.0,2.0,3.5,1.0 5.9,3.0,4.2,1.5 6.0,2.2,4.0,1.0 6.1,2.9,4.7,1.4 5.6,2.9,3.6,1.3 6.7,3.1,4.4,1.4 5.6,3.0,4.5,1.5 5.8,2.7,4.1,1.0 6.2,2.2,4.5,1.5 5.6,2.5,3.9,1.1 5.9,3.2,4.8,1.8 6.1,2.8,4.0,1.3 6.3,2.5,4.9,1.5 6.1,2.8,4.7,1.2 6.4,2.9,4.3,1.3 6.6,3.0,4.4,1.4 6.8,2.8,4.8,1.4 6.7,3.0,5.0,1.7 6.0,2.9,4.5,1.5 5.7,2.6,3.5,1.0 5.5,2.4,3.8,1.1 5.5,2.4,3.7,1.0 5.8,2.7,3.9,1.2 6.0,2.7,5.1,1.6 5.4,3.0,4.5,1.5 6.0,3.4,4.5,1.6 6.7,3.1,4.7,1.5 6.3,2.3,4.4,1.3 5.6,3.0,4.1,1.3 5.5,2.5,4.0,1.3 5.5,2.6,4.4,1.2 6.1,3.0,4.6,1.4 5.8,2.6,4.0,1.2 5.0,2.3,3.3,1.0 5.6,2.7,4.2,1.3 5.7,3.0,4.2,1.2 5.7,2.9,4.2,1.3 6.2,2.9,4.3,1.3 5.1,2.5,3.0,1.1 5.7,2.8,4.1,1.3',
+    virginica: '6.3,3.3,6.0,2.5 5.8,2.7,5.1,1.9 7.1,3.0,5.9,2.1 6.3,2.9,5.6,1.8 6.5,3.0,5.8,2.2 7.6,3.0,6.6,2.1 4.9,2.5,4.5,1.7 7.3,2.9,6.3,1.8 6.7,2.5,5.8,1.8 7.2,3.6,6.1,2.5 6.5,3.2,5.1,2.0 6.4,2.7,5.3,1.9 6.8,3.0,5.5,2.1 5.7,2.5,5.0,2.0 5.8,2.8,5.1,2.4 6.4,3.2,5.3,2.3 6.5,3.0,5.5,1.8 7.7,3.8,6.7,2.2 7.7,2.6,6.9,2.3 6.0,2.2,5.0,1.5 6.9,3.2,5.7,2.3 5.6,2.8,4.9,2.0 7.7,2.8,6.7,2.0 6.3,2.7,4.9,1.8 6.7,3.3,5.7,2.1 7.2,3.2,6.0,1.8 6.2,2.8,4.8,1.8 6.1,3.0,4.9,1.8 6.4,2.8,5.6,2.1 7.2,3.0,5.8,1.6 7.4,2.8,6.1,1.9 7.9,3.8,6.4,2.0 6.4,2.8,5.6,2.2 6.3,2.8,5.1,1.5 6.1,2.6,5.6,1.4 7.7,3.0,6.1,2.3 6.3,3.4,5.6,2.4 6.4,3.1,5.5,1.8 6.0,3.0,4.8,1.8 6.9,3.1,5.4,2.1 6.7,3.1,5.6,2.4 6.9,3.1,5.1,2.3 5.8,2.7,5.1,1.9 6.8,3.2,5.9,2.3 6.7,3.3,5.7,2.5 6.7,3.0,5.2,2.3 6.3,2.5,5.0,1.9 6.5,3.0,5.2,2.0 6.2,3.4,5.4,2.3 5.9,3.0,5.1,1.8',
+  };
+  const TENNIS = `outlook,temperature,humidity,wind,play
+sunny,hot,high,weak,no
+sunny,hot,high,strong,no
+overcast,hot,high,weak,yes
+rain,mild,high,weak,yes
+rain,cool,normal,weak,yes
+rain,cool,normal,strong,no
+overcast,cool,normal,strong,yes
+sunny,mild,high,weak,no
+sunny,cool,normal,weak,yes
+rain,mild,normal,weak,yes
+sunny,mild,normal,strong,yes
+overcast,mild,high,strong,yes
+overcast,hot,normal,weak,yes
+rain,mild,high,strong,no`;
 
-// DOM elements
-const fileInput = document.getElementById('file-input');
-const pasteArea = document.getElementById('paste-area');
-const loadPasteBtn = document.getElementById('load-paste');
-const targetSelect = document.getElementById('target-select');
-const criterionSelect = document.getElementById('criterion');
-const maxDepthInput = document.getElementById('max-depth');
-const minSplitInput = document.getElementById('min-split');
-const minGainInput = document.getElementById('min-gain');
-const buildBtn = document.getElementById('build-btn');
-const exportSvgBtn = document.getElementById('export-svg');
-const exportJsonBtn = document.getElementById('export-json');
-const rowIndexInput = document.getElementById('row-index');
-const highlightPathBtn = document.getElementById('highlight-path');
-const taskBadge = document.getElementById('task-badge');
-const status = document.getElementById('status');
-const tooltip = document.getElementById('tooltip');
+  function irisCSV() {
+    const lines = ['sepal_length,sepal_width,petal_length,petal_width,species'];
+    Object.entries(IRIS).forEach(([species, block]) => block.split(' ').forEach(row => lines.push(`${row},${species}`)));
+    return lines.join('\n');
+  }
 
-// Initialize with demo data
-loadCSV(DEMO_CSV);
+  // A seeded generator keeps the synthetic sample identical on every visit.
+  function mulberry32(seed) {
+    return () => {
+      seed = (seed + 0x6D2B79F5) | 0;
+      let t = Math.imul(seed ^ (seed >>> 15), 1 | seed);
+      t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+      return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+    };
+  }
+  function housesCSV() {
+    const random = mulberry32(11);
+    const rate = { centre: 5.2, suburb: 3.6, village: 2.4 };
+    const lines = ['area_sqm,rooms,age_years,district,garden,price_k'];
+    for (let i = 0; i < 160; i++) {
+      const district = ['centre', 'suburb', 'village'][Math.floor(random() * 3)];
+      const area = Math.round(35 + random() * 165);
+      const rooms = Math.max(1, Math.round(area / 28 + (random() - .5) * 2));
+      const age = Math.round(random() * 90);
+      const garden = district !== 'centre' && random() < .6 ? 'yes' : 'no';
+      const price = Math.round(area * rate[district] * (1 - age / 300) + (garden === 'yes' ? 35 : 0) + (random() - .5) * 60);
+      const cells = [area, rooms, age, district, garden, price];
+      if (random() < .06) cells[2] = '';   // a few blank cells show how missing values behave
+      if (random() < .05) cells[4] = '';
+      lines.push(cells.join(','));
+    }
+    return lines.join('\n');
+  }
 
-// Resize handler
-let resizeTimeout;
-window.addEventListener('resize', () => {
-  clearTimeout(resizeTimeout);
-  resizeTimeout = setTimeout(() => {
-    if (tree) renderTree();
-  }, 250);
-});
+  const SAMPLES = {
+    iris: { label: 'Iris flowers', csv: irisCSV, note: 'Fisher\'s 150 iris flowers: four measurements in centimetres and three species. Every feature is numeric.' },
+    tennis: { label: 'Play tennis', csv: () => TENNIS, note: 'The classic 14-day weather table. Every feature is categorical, so each split asks whether a column equals one value.' },
+    houses: { label: 'House prices (synthetic)', csv: housesCSV, note: '160 generated listings with a numeric price, so the tree switches to regression and MSE. A few cells are blank to show how missing values behave.' },
+  };
 
-// Event listeners
-fileInput.addEventListener('change', (e) => {
-  const file = e.target.files[0];
-  if (file) {
+  /* ------------------------------------------------------------------ State */
+  let dataset = [];          // one object per CSV line, keyed by header
+  let headers = [];
+  let datasetLabel = '';
+  let parseNotes = [];       // problems PapaParse reported for the current dataset
+  let target = '';
+  let criterion = 'gini';
+  let model = null;          // { tree, task, target, criterion, types, opts, stats, key } for the tree on screen
+  let layout = null;         // { root, bounds, maxImpurity }
+  let trace = null;          // { index, nodes, steps, leaf }
+  let building = false;
+  let buildToken = 0;        // bumping it abandons a build that is still running
+  let sliceStart = 0;
+  let grown = 0;
+  let lastBuildMs = 0;
+
+  /* -------------------------------------------------------------- Algorithm */
+  // The tree is grown exactly as before: greedy, binary, one feature at a time. The only additions
+  // are cooperative pauses (breathe) so a large upload cannot freeze the page.
+  const CANCELLED = Symbol('cancelled');
+  async function breathe(token) {
+    if (performance.now() - sliceStart < 28) return;
+    setStatus('running', `Growing the tree: ${integer.format(grown)} ${grown === 1 ? 'node' : 'nodes'} so far.`);
+    await new Promise(resolve => setTimeout(resolve));
+    if (token !== buildToken) throw CANCELLED;
+    sliceStart = performance.now();
+  }
+
+  const present = value => value !== '' && value != null;
+
+  function detectTask() {
+    const values = dataset.map(row => row[target]).filter(present);
+    const numericCount = values.filter(v => !isNaN(parseFloat(v))).length;
+    const numericRatio = numericCount / values.length;
+    const uniqueCount = new Set(values).size;
+    return { task: numericRatio >= 0.8 && uniqueCount > 12 ? 'regression' : 'classification', classes: uniqueCount };
+  }
+
+  function detectTypes() {
+    const types = Object.create(null);
+    headers.forEach(col => {
+      if (col === target) return;
+      const values = dataset.map(row => row[col]).filter(present);
+      if (values.length === 0) return;
+      const numericCount = values.filter(v => !isNaN(parseFloat(v))).length;
+      types[col] = (numericCount / values.length) > 0.7 ? 'numeric' : 'categorical';
+    });
+    return types;
+  }
+
+  function countLabels(labels) {
+    const counts = Object.create(null);   // no prototype, so a class called "constructor" is just a key
+    labels.forEach(label => { counts[label] = (counts[label] || 0) + 1; });
+    return counts;
+  }
+
+  function calcImpurity(labels, ctx) {
+    if (labels.length === 0) return 0;
+    if (ctx.task === 'regression') {
+      const mean = labels.reduce((a, b) => a + b, 0) / labels.length;
+      return labels.reduce((sum, y) => sum + Math.pow(y - mean, 2), 0) / labels.length;
+    }
+    const probs = Object.values(countLabels(labels)).map(c => c / labels.length);
+    if (ctx.criterion === 'gini') return 1 - probs.reduce((sum, p) => sum + p * p, 0);
+    return -probs.reduce((sum, p) => sum + (p > 0 ? p * Math.log2(p) : 0), 0);
+  }
+
+  function gainOf(parent, labels, leftLabels, rightLabels, ctx) {
+    return parent - (
+      (leftLabels.length / labels.length) * calcImpurity(leftLabels, ctx) +
+      (rightLabels.length / labels.length) * calcImpurity(rightLabels, ctx)
+    );
+  }
+
+  // Thresholds are the midpoints between neighbouring values. Rows without a number in this column are ignored.
+  async function findNumericSplit(rows, feature, labels, parent, ctx) {
+    const pairs = [];
+    rows.forEach((row, i) => {
+      const val = parseFloat(row[feature]);
+      if (!isNaN(val)) pairs.push({ val, label: labels[i] });
+    });
+    if (pairs.length < 2) return null;
+    pairs.sort((a, b) => a.val - b.val);
+    const sorted = pairs.map(p => p.label);
+    const uniqueVals = [];
+    pairs.forEach(p => { if (!uniqueVals.length || uniqueVals[uniqueVals.length - 1] !== p.val) uniqueVals.push(p.val); });
+    if (uniqueVals.length < 2) return null;
+
+    let bestGain = -Infinity;
+    let bestThreshold = null;
+    let cut = 0;   // pairs are sorted, so "value <= threshold" is always a prefix
+    for (let i = 0; i < uniqueVals.length - 1; i++) {
+      const threshold = (uniqueVals[i] + uniqueVals[i + 1]) / 2;
+      while (cut < pairs.length && pairs[cut].val <= threshold) cut++;
+      if (cut === 0 || cut === pairs.length) continue;
+      const gain = gainOf(parent, labels, sorted.slice(0, cut), sorted.slice(cut), ctx);
+      if (gain > bestGain) { bestGain = gain; bestThreshold = threshold; }
+      if ((i & 63) === 63) await breathe(ctx.token);
+    }
+    return bestThreshold !== null ? { threshold: bestThreshold, gain: bestGain } : null;
+  }
+
+  // One category against all the others. Rows with an empty cell in this column are ignored.
+  async function findCategoricalSplit(rows, feature, labels, parent, ctx) {
+    const categories = [...new Set(rows.map(r => r[feature]).filter(present))];
+    if (categories.length < 2) return null;
+    let bestGain = -Infinity;
+    let bestCategory = null;
+    for (let c = 0; c < categories.length; c++) {
+      const leftLabels = [];
+      const rightLabels = [];
+      rows.forEach((row, i) => {
+        if (row[feature] === categories[c]) leftLabels.push(labels[i]);
+        else if (present(row[feature])) rightLabels.push(labels[i]);
+      });
+      if (leftLabels.length === 0 || rightLabels.length === 0) continue;
+      const gain = gainOf(parent, labels, leftLabels, rightLabels, ctx);
+      if (gain > bestGain) { bestGain = gain; bestCategory = categories[c]; }
+      if ((c & 31) === 31) await breathe(ctx.token);
+    }
+    return bestCategory !== null ? { category: bestCategory, gain: bestGain } : null;
+  }
+
+  // What a node would predict, kept on every node so the tooltips can show it.
+  function summarise(labels, ctx) {
+    if (ctx.task === 'regression') {
+      const mean = labels.reduce((a, b) => a + b, 0) / labels.length;
+      const variance = labels.reduce((sum, y) => sum + Math.pow(y - mean, 2), 0) / labels.length;
+      return { prediction: mean, std: Math.sqrt(variance) };
+    }
+    const counts = countLabels(labels);
+    const prediction = Object.keys(counts).reduce((a, b) => (counts[a] > counts[b] ? a : b));
+    return { prediction, counts };
+  }
+
+  function makeLeaf(labels, depth, impurity, ctx) {
+    return { type: 'leaf', depth, samples: labels.length, impurity, ...summarise(labels, ctx) };
+  }
+
+  // Every row that reaches here has a usable target, so labels[i] always belongs to rows[i].
+  async function grow(rows, depth, ctx) {
+    const labels = ctx.task === 'regression' ? rows.map(r => parseFloat(r[ctx.target])) : rows.map(r => r[ctx.target]);
+    const impurity = calcImpurity(labels, ctx);
+    grown++;
+
+    if (depth >= ctx.maxDepth || rows.length < ctx.minSplit) return makeLeaf(labels, depth, impurity, ctx);
+    if (ctx.task === 'classification' && new Set(labels).size === 1) return makeLeaf(labels, depth, impurity, ctx);
+
+    let bestSplit = null;
+    let bestFeature = null;
+    let bestType = null;
+    for (const feature of Object.keys(ctx.types)) {
+      const type = ctx.types[feature];
+      const split = type === 'numeric'
+        ? await findNumericSplit(rows, feature, labels, impurity, ctx)
+        : await findCategoricalSplit(rows, feature, labels, impurity, ctx);
+      // A best gain of exactly zero counts as "nothing yet", as it always has in this lab.
+      if (split && split.gain > ((bestSplit && bestSplit.gain) || -Infinity)) {
+        bestSplit = split;
+        bestFeature = feature;
+        bestType = type;
+      }
+      await breathe(ctx.token);
+    }
+    if (!bestSplit || bestSplit.gain < ctx.minGain) return makeLeaf(labels, depth, impurity, ctx);
+
+    let leftRows;
+    let rightRows;
+    if (bestType === 'numeric') {
+      leftRows = rows.filter(r => { const val = parseFloat(r[bestFeature]); return !isNaN(val) && val <= bestSplit.threshold; });
+      rightRows = rows.filter(r => { const val = parseFloat(r[bestFeature]); return !isNaN(val) && val > bestSplit.threshold; });
+    } else {
+      leftRows = rows.filter(r => r[bestFeature] === bestSplit.category);
+      rightRows = rows.filter(r => r[bestFeature] !== bestSplit.category && present(r[bestFeature]));
+    }
+    if (leftRows.length === 0 || rightRows.length === 0) return makeLeaf(labels, depth, impurity, ctx);
+
+    const node = {
+      type: 'node',
+      depth,
+      samples: labels.length,
+      impurity,
+      split: { feature: bestFeature, type: bestType, threshold: bestSplit.threshold, category: bestSplit.category, gain: bestSplit.gain, impurity },
+      ...summarise(labels, ctx),
+      left: null,
+      right: null,
+    };
+    node.left = await grow(leftRows, depth + 1, ctx);
+    node.right = await grow(rightRows, depth + 1, ctx);
+    return node;
+  }
+
+  // The path a row takes. A missing value fails the test, so it follows the "no" branch.
+  function route(tree, row) {
+    const steps = [];
+    let node = tree;
+    while (node.type !== 'leaf') {
+      const { feature, type, threshold, category } = node.split;
+      let goLeft;
+      if (type === 'numeric') {
+        const val = parseFloat(row[feature]);
+        goLeft = !isNaN(val) && val <= threshold;
+      } else {
+        goLeft = row[feature] === category;
+      }
+      steps.push({ node, goLeft, value: row[feature] });
+      node = goLeft ? node.left : node.right;
+    }
+    return { steps, leaf: node };
+  }
+
+  function measure(tree, rows, task, targetColumn) {
+    let nodes = 0;
+    let leaves = 0;
+    let depth = 0;
+    (function walk(node) {
+      nodes++;
+      if (node.type === 'leaf') { leaves++; depth = Math.max(depth, node.depth); return; }
+      walk(node.left);
+      walk(node.right);
+    })(tree);
+    const stats = { nodes, leaves, depth, rows: rows.length };
+    if (task === 'regression') {
+      const actual = rows.map(r => parseFloat(r[targetColumn]));
+      const mean = actual.reduce((a, b) => a + b, 0) / actual.length;
+      let sse = 0;
+      let sst = 0;
+      rows.forEach((row, i) => { sse += (actual[i] - route(tree, row).leaf.prediction) ** 2; sst += (actual[i] - mean) ** 2; });
+      stats.rmse = Math.sqrt(sse / rows.length);
+      stats.r2 = sst > 0 ? 1 - sse / sst : 1;
+    } else {
+      stats.accuracy = rows.filter(row => route(tree, row).leaf.prediction === row[targetColumn]).length / rows.length;
+    }
+    return stats;
+  }
+
+  /* ------------------------------------------------------------- Formatting */
+  function formatNumber(n, digits = 3) {
+    if (!Number.isFinite(n)) return 'n/a';
+    if (n === 0) return '0';
+    const size = Math.abs(n);
+    if (size < 10 ** -digits || size >= 1e6) return n.toExponential(2).replace(/\.?0+e/, 'e').replace('e+', 'e');
+    return String(parseFloat(n.toFixed(digits)));
+  }
+  const clip = (text, max) => (text.length > max ? `${text.slice(0, max - 1)}…` : text);
+  const percent = share => `${(share * 100).toFixed(1).replace(/\.0$/, '')}%`;
+  const plural = (n, word) => `${integer.format(n)} ${word}${n === 1 ? '' : 's'}`;
+  const impurityName = info => (info.task === 'regression' ? 'MSE' : info.criterion === 'gini' ? 'Gini' : 'Entropy');
+
+  function ruleText(split, short) {
+    const feature = short ? clip(String(split.feature), 24) : String(split.feature);
+    if (split.type === 'numeric') return `${feature} ≤ ${formatNumber(split.threshold)}`;
+    return `${feature} = ${short ? clip(String(split.category), 18) : split.category}`;
+  }
+  const predictionText = (node, info) => (info.task === 'regression' ? formatNumber(node.prediction) : String(node.prediction));
+
+  /* ----------------------------------------------------------------- Layout */
+  const ruler = document.createElement('canvas').getContext('2d');
+  function textWidth(text, font) { ruler.font = font; return ruler.measureText(text).width; }
+
+  function describeCard(node, info) {
+    const leaf = node.type === 'leaf';
+    const title = leaf ? clip(predictionText(node, info), 30) : ruleText(node.split, true);
+    const sub = leaf
+      ? `n ${integer.format(node.samples)} · ${impurityName(info).toLowerCase()} ${formatNumber(node.impurity)}`
+      : `n ${integer.format(node.samples)} · gain ${formatNumber(node.split.gain)}`;
+    const textX = leaf ? 40 : 35;
+    // A little slack covers the fallback fonts a viewer of the exported SVG may have.
+    const width = Math.ceil(textX + Math.max(textWidth(title, TITLE_FONT), textWidth(sub, SUB_FONT)) * 1.04 + (leaf ? 20 : 14));
+    return { leaf, title, sub, textX, w: Math.max(96, width) };
+  }
+
+  // Root on the left, one column per depth. Columns are as wide as their widest card, so labels never collide.
+  function computeLayout(info) {
+    const root = d3.hierarchy(info.tree, d => (d.type === 'node' ? [d.left, d.right] : null));
+    root.each(n => { n.card = describeCard(n.data, info); });
+    d3.tree().nodeSize([ROW, 1]).separation((a, b) => (a.parent === b.parent ? 1 : 1.2))(root);
+    const widest = [];
+    root.each(n => { widest[n.depth] = Math.max(widest[n.depth] || 0, n.card.w); });
+    const columns = [];
+    let x = 0;
+    widest.forEach((w, depth) => { columns[depth] = x; x += w + GAP; });
+    let top = Infinity;
+    let bottom = -Infinity;
+    let right = 0;
+    let maxImpurity = 0;
+    root.each(n => {
+      n.px = columns[n.depth];   // left edge of the card
+      n.py = n.x;                // vertical centre of the card
+      top = Math.min(top, n.py - CARD_H / 2);
+      bottom = Math.max(bottom, n.py + CARD_H / 2);
+      right = Math.max(right, n.px + n.card.w);
+      maxImpurity = Math.max(maxImpurity, n.data.impurity);
+    });
+    return { root, maxImpurity, bounds: { x: -5, y: top - 5, w: right + 10, h: bottom - top + 10 } };
+  }
+
+  /* ---------------------------------------------------------------- Drawing */
+  // Everything is written as plain attributes with concrete colours, so the same routine draws the
+  // live plot and the exported file.
+  function palette() {
+    return { ink: SGLab.ink(), muted: SGLab.muted(), faint: SGLab.faint(), plot: SGLab.plot(), accent: SGLab.accent(3), card: '#141726', cardLine: '#2c3148', link: '#3d4463', ring: '#8fb8ef' };
+  }
+  const shade = node => (layout.maxImpurity > 0 ? node.data.impurity / layout.maxImpurity : 0);
+
+  function drawTree(g, live) {
+    const c = palette();
+    const root = layout.root;
+    const total = root.data.samples || 1;
+    const on = node => Boolean(trace && trace.nodes.has(node.data));
+    const rest = trace ? .4 : 1;   // everything off the traced path steps back
+    const links = root.links().sort((a, b) => on(a.target) - on(b.target));   // traced links are drawn last, on top
+    const curve = d3.linkHorizontal().source(l => [l.source.px + l.source.card.w, l.source.py]).target(l => [l.target.px, l.target.py]);
+    const isYes = l => l.target === l.source.children[0];
+    g.attr('font-family', SANS);
+
+    g.append('g').attr('fill', 'none').attr('stroke-linecap', 'round')
+      .selectAll('path').data(links).join('path')
+      .attr('class', l => (on(l.target) ? 'link on-path' : 'link'))
+      .attr('d', curve)
+      .attr('stroke', l => (on(l.target) ? c.accent : c.link))
+      .attr('stroke-width', l => 1.5 + 4.5 * Math.sqrt(l.target.data.samples / total) + (on(l.target) ? 1.5 : 0))
+      .attr('opacity', l => (on(l.target) ? 1 : rest));
+
+    g.append('g').attr('font-family', MONO).attr('font-size', 10).attr('text-anchor', 'end')
+      .selectAll('text').data(links).join('text')
+      .attr('x', l => l.target.px - 7)
+      .attr('y', l => l.target.py + (isYes(l) ? -8 : 16))
+      .attr('fill', l => (on(l.target) ? c.ink : c.muted))
+      .attr('font-weight', l => (on(l.target) ? 600 : 400))
+      .attr('opacity', l => (on(l.target) ? 1 : rest))
+      .text(l => (isYes(l) ? 'yes' : 'no'));
+
+    const node = g.append('g').selectAll('g').data(root.descendants()).join('g')
+      .attr('class', d => (on(d) ? 'node on-path' : 'node'))
+      .attr('transform', d => `translate(${d.px},${d.py - CARD_H / 2})`)
+      .attr('opacity', d => (on(d) ? 1 : rest));
+    if (live) node.style('--imp', d => SGLab.ramp(shade(d)));
+
+    node.filter(on).append('rect')
+      .attr('x', -4).attr('y', -4).attr('width', d => d.card.w + 8).attr('height', CARD_H + 8)
+      .attr('rx', d => (d.card.leaf ? CARD_H / 2 + 4 : 14))
+      .attr('fill', 'none').attr('stroke', c.accent).attr('stroke-opacity', .3).attr('stroke-width', 4);
+    node.append('rect').attr('class', 'card')
+      .attr('width', d => d.card.w).attr('height', CARD_H)
+      .attr('rx', d => (d.card.leaf ? CARD_H / 2 : 10))
+      .attr('fill', c.card)
+      .attr('stroke', d => (on(d) ? c.accent : c.cardLine))
+      .attr('stroke-width', d => (on(d) ? 2 : 1));
+    // Shape says what the node is (square split, round leaf); the fill says how mixed it is.
+    node.filter(d => d.card.leaf).append('circle').attr('class', 'marker')
+      .attr('cx', CARD_H / 2).attr('cy', CARD_H / 2).attr('r', 7);
+    node.filter(d => !d.card.leaf).append('rect').attr('class', 'marker')
+      .attr('x', 12).attr('y', CARD_H / 2 - 7).attr('width', 14).attr('height', 14).attr('rx', 3.5);
+    node.select('.marker').attr('fill', d => SGLab.ramp(shade(d))).attr('stroke', c.ring).attr('stroke-width', 1.5);
+    node.append('text').attr('x', d => d.card.textX).attr('y', 20)
+      .attr('font-size', 13).attr('font-weight', 600).attr('fill', c.ink).text(d => d.card.title);
+    node.append('text').attr('x', d => d.card.textX).attr('y', 35)
+      .attr('font-family', MONO).attr('font-size', 10.5).attr('fill', c.muted).text(d => d.card.sub);
+
+    if (!live) return;
+    node
+      .on('pointerenter pointermove', (event, d) => SGLab.tooltip.show(event.clientX, event.clientY, tipHTML(d)))
+      .on('pointerleave', event => { if (event.pointerType === 'mouse') SGLab.tooltip.hide(); });
+  }
+
+  function tipHTML(d) {
+    const node = d.data;
+    const leaf = node.type === 'leaf';
+    const total = layout.root.data.samples || 1;
+    const head = leaf ? `Predicts ${esc(clip(predictionText(node, model), 60))}` : esc(clip(ruleText(node.split, false), 80));
+    const rows = [
+      ['Rows', `${integer.format(node.samples)} (${percent(node.samples / total)})`],
+      [impurityName(model), formatNumber(node.impurity, 4)],
+    ];
+    if (!leaf) rows.push(['Gain', formatNumber(node.split.gain, 4)]);
+    if (model.task === 'regression') rows.push(['Mean', formatNumber(node.prediction)], ['Std dev', formatNumber(node.std)]);
+    let html = `<div class="tip-row"><i style="--c:${SGLab.ramp(shade(d))}"></i><b>${head}</b></div>`
+      + `<div class="tip-muted">${leaf ? 'Leaf' : 'Split'} at depth ${node.depth}</div>`
+      + `<dl class="tip-kv">${rows.map(([k, v]) => `<div><dt>${k}</dt><dd>${esc(v)}</dd></div>`).join('')}</dl>`;
+    if (model.task === 'classification') {
+      const classes = Object.entries(node.counts).sort((a, b) => b[1] - a[1]);
+      html += `<div class="tip-dist">${classes.slice(0, 6).map(([name, count]) =>
+        `<div class="tip-bar"><span>${esc(name)}</span><span>${integer.format(count)}</span><i style="width:${(count / node.samples * 100).toFixed(1)}%"></i></div>`).join('')}`
+        + `${classes.length > 6 ? `<div class="tip-muted">and ${plural(classes.length - 6, 'more class').replace('classs', 'classes')}</div>` : ''}</div>`;
+    }
+    return html;
+  }
+
+  /* ------------------------------------------------------------- Pan & zoom */
+  const svgEl = $('tree');
+  const svg = d3.select(svgEl);
+  const viewport = svg.append('g');
+  const zoom = d3.zoom()
+    .scaleExtent([.2, 3])
+    // Plain scrolling must keep scrolling the page, so the wheel only zooms with Ctrl or Cmd held
+    // (a trackpad pinch arrives that way too).
+    .filter(event => (event.type === 'wheel' ? event.ctrlKey || event.metaKey : !event.button))
+    .wheelDelta(event => {
+      const delta = -event.deltaY * (event.deltaMode === 1 ? .05 : event.deltaMode ? 1 : .002) * (event.ctrlKey ? 10 : 1);
+      return Math.max(-.5, Math.min(.5, delta));
+    })
+    .on('start', () => svgEl.classList.add('is-panning'))
+    .on('end', () => svgEl.classList.remove('is-panning'))
+    .on('zoom', event => {
+      viewport.attr('transform', event.transform);
+      const overview = event.transform.k < OVERVIEW_BELOW;
+      if (overview !== svgEl.classList.contains('is-overview')) {
+        svgEl.classList.toggle('is-overview', overview);
+        $('plotHint').firstElementChild.textContent = overview ? 'Zoom in to read the rules. Drag to pan.' : 'Drag to pan. Ctrl + scroll or pinch to zoom.';
+        $('plotHint').lastElementChild.textContent = overview ? 'Zoom in to read the rules. Drag to pan.' : 'Drag to pan. Pinch to zoom.';
+      }
+      if (event.sourceEvent) SGLab.tooltip.hide();
+    });
+  svg.call(zoom);
+
+  // Scales and centres the whole tree inside the plot, clear of the overlaid chips, buttons and hint.
+  function fit(animate) {
+    if (!layout) return;
+    const width = svgEl.clientWidth;
+    const height = svgEl.clientHeight;
+    if (!width || !height) return;
+    const narrow = width < 480;
+    const pad = { top: Math.max(54, $('plotChips').offsetTop + $('plotChips').offsetHeight + 12), right: narrow ? 14 : 24, bottom: 36, left: narrow ? 14 : 24 };
+    const b = layout.bounds;
+    const roomX = Math.max(60, width - pad.left - pad.right);
+    const roomY = Math.max(60, height - pad.top - pad.bottom);
+    const k = Math.min(roomX / b.w, roomY / b.h, 1.3);
+    zoom.scaleExtent([Math.min(.2, k * .7), 3]);
+    const transform = d3.zoomIdentity
+      .translate(pad.left + (roomX - b.w * k) / 2 - b.x * k, pad.top + (roomY - b.h * k) / 2 - b.y * k)
+      .scale(k);
+    (animate && !SGLab.reducedMotion ? svg.transition().duration(420) : svg).call(zoom.transform, transform);
+  }
+  function zoomBy(factor) {
+    if (!layout) return;
+    (SGLab.reducedMotion ? svg : svg.transition().duration(220)).call(zoom.scaleBy, factor);
+  }
+
+  function summaryLabel() {
+    if (!model) return 'Decision tree diagram. No tree has been built yet.';
+    const s = model.stats;
+    const rootRule = model.tree.type === 'node' ? ` The first split is ${ruleText(model.tree.split, false)}.` : ' The tree is a single leaf.';
+    return `Decision tree predicting ${model.target}: ${plural(s.nodes, 'node')}, ${plural(s.leaves, 'leaf').replace('leafs', 'leaves')}, depth ${s.depth}.${rootRule} Split nodes are squares, leaves are circles, and a lighter marker means a more mixed node.`;
+  }
+
+  function render() {
+    viewport.selectAll('*').remove();
+    SGLab.tooltip.hide();
+    svgEl.setAttribute('aria-label', summaryLabel());
+    if (layout) drawTree(viewport, true);
+  }
+
+  /* ------------------------------------------------------------------ Build */
+  function setStatus(state, message) { SGLab.status($('mainStatus'), state, message); }
+
+  function readOptions() {
+    let maxDepth = parseInt($('maxDepth').value, 10);
+    if (!Number.isFinite(maxDepth)) maxDepth = 4;
+    maxDepth = Math.max(1, Math.min(30, maxDepth));
+    let minSplit = parseInt($('minSplit').value, 10);
+    if (!Number.isFinite(minSplit) || minSplit < 2) minSplit = 2;
+    let minGain = parseFloat($('minGain').value);
+    if (!Number.isFinite(minGain) || minGain < 0) minGain = 0;
+    $('minSplit').value = minSplit;
+    $('minGain').value = minGain;
+    return { maxDepth, minSplit, minGain };
+  }
+  const settingsKey = () => JSON.stringify([datasetLabel, dataset.length, target, criterion, $('maxDepth').value, $('minSplit').value, $('minGain').value]);
+
+  function showTask(info) {
+    const regression = info.task === 'regression';
+    $('taskValue').textContent = regression ? 'Regression' : 'Classification';
+    $('critValue').textContent = regression ? 'MSE' : criterion === 'gini' ? 'Gini' : 'Entropy';
+    $('critHint').textContent = regression
+      ? 'A numeric target is scored with mean squared error, so Gini and entropy do not apply.'
+      : 'Both measure how mixed the classes in a node are.';
+    document.querySelectorAll('[data-criterion]').forEach(button => {
+      button.disabled = regression;
+      button.setAttribute('aria-pressed', String(!regression && button.dataset.criterion === criterion));
+    });
+  }
+
+  function syncButtons() {
+    $('buildLabel').textContent = building ? 'Stop build' : 'Build tree';
+    ['exportSvg', 'exportJson', 'tracePath', 'zoomIn', 'zoomOut', 'fit'].forEach(id => { $(id).disabled = !model; });
+    $('clearPath').disabled = !trace;
+  }
+
+  function showStats() {
+    const s = model ? model.stats : null;
+    const regression = model && model.task === 'regression';
+    $('statDepth').innerHTML = s ? `${s.depth} <small>of max ${model.opts.maxDepth}</small>` : '&ndash;';
+    $('statNodes').textContent = s ? integer.format(s.nodes) : '–';
+    $('statLeaves').textContent = s ? integer.format(s.leaves) : '–';
+    $('statFitLabel').textContent = regression ? 'Training RMSE' : 'Training accuracy';
+    $('statFit').innerHTML = !s ? '&ndash;' : regression ? `${esc(formatNumber(s.rmse))} <small>R² ${s.r2.toFixed(3)}</small>` : esc(percent(s.accuracy));
+
+    const chips = $('plotChips');
+    chips.textContent = '';
+    if (model) {
+      [[regression ? 'Regression' : 'Classification'], [impurityName(model)], [`target: ${model.target}`, true]].forEach(([text, keepCase]) => {
+        const chip = document.createElement('span');
+        chip.className = keepCase ? 'chip keep-case' : 'chip';
+        chip.textContent = text;
+        chips.append(chip);
+      });
+    }
+    $('scaleTitle').textContent = model ? `Node colour: ${impurityName(model)}${regression ? ' (variance of the target)' : ' impurity'}` : 'Node colour: impurity';
+    $('scaleHigh').textContent = model && layout.maxImpurity > 0 ? `${formatNumber(layout.maxImpurity)} (most mixed here)` : 'most mixed';
+  }
+
+  function noTree(message) {
+    model = null;
+    layout = null;
+    trace = null;
+    building = false;
+    render();
+    showTrace();
+    showStats();
+    syncButtons();
+    $('plotEmpty').hidden = false;
+    $('plotEmpty').textContent = 'No tree to show. ' + message;
+    setStatus('error', message);
+  }
+
+  async function build() {
+    const token = ++buildToken;
+    clearTrace();
+    if (!dataset.length) { noTree('Load a dataset first: pick a sample, upload a CSV or paste one.'); return; }
+    const info = detectTask();
+    showTask(info);
+    const types = detectTypes();
+    if (!Object.keys(types).length) { noTree(`Every column other than "${target}" is empty, so there is nothing to split on.`); return; }
+    const usable = dataset.filter(row => (info.task === 'regression' ? !isNaN(parseFloat(row[target])) : present(row[target])));
+    if (!usable.length) { noTree(`Column "${target}" has no values to learn from. Choose another target.`); return; }
+
+    const opts = readOptions();
+    const key = settingsKey();
+    const ctx = { task: info.task, target, types, criterion, ...opts, token };
+    building = true;
+    grown = 0;
+    syncButtons();
+    const started = performance.now();
+    sliceStart = started;
+    let tree;
+    try {
+      tree = await grow(usable, 0, ctx);
+    } catch (error) {
+      if (error !== CANCELLED) noTree(`The build failed: ${error.message}`);
+      return;
+    }
+    if (token !== buildToken) return;
+    building = false;
+    lastBuildMs = performance.now() - started;
+
+    model = { tree, task: info.task, target, criterion, types, opts, key, stats: measure(tree, usable, info.task, target) };
+    layout = computeLayout(model);
+    $('plotEmpty').hidden = true;
+    render();
+    fit(false);
+    showStats();
+    syncButtons();
+
+    const s = model.stats;
+    const skipped = dataset.length - usable.length;
+    const notes = [];
+    if (s.nodes === 1) notes.push('No split cleared the limits, so the tree is a single leaf. Lower min gain or min split to let it grow.');
+    if (skipped) notes.push(`${plural(skipped, 'row')} without a usable ${target} value ${skipped === 1 ? 'was' : 'were'} left out.`);
+    const score = info.task === 'regression' ? `Training RMSE ${formatNumber(s.rmse)}.` : `Training accuracy ${percent(s.accuracy)}.`;
+    setStatus(notes.length ? 'warn' : 'done',
+      `${info.task === 'regression' ? 'Regression' : 'Classification'} tree for ${target} from ${plural(s.rows, 'row')}: ${plural(s.nodes, 'node')}, ${plural(s.leaves, 'leaf').replace('leafs', 'leaves')}, depth ${s.depth}. ${score}${notes.length ? ' ' + notes.join(' ') : ''}`);
+  }
+
+  function stopBuild() {
+    buildToken++;
+    building = false;
+    syncButtons();
+    setStatus('idle', model ? 'Build stopped. The previous tree is still shown.' : 'Build stopped.');
+  }
+
+  /* ------------------------------------------------------------ Row tracing */
+  function clearTrace() {
+    if (!trace) return;
+    trace = null;
+    render();
+    showTrace();
+    syncButtons();
+  }
+
+  function showTrace() {
+    document.querySelectorAll('#preview tr.is-traced').forEach(tr => {
+      tr.classList.remove('is-traced');
+      tr.querySelector('.row-pick').setAttribute('aria-pressed', 'false');
+    });
+    $('traceOut').hidden = !trace;
+    if (!trace) return;
+
+    const row = dataset[trace.index];
+    const regression = model.task === 'regression';
+    const predicted = predictionText(trace.leaf, model);
+    const summary = $('traceSummary');
+    summary.textContent = '';
+    const bold = text => { const b = document.createElement('b'); b.textContent = text; return b; };
+    summary.append(`Row ${trace.index + 1} ends in a leaf that predicts `, bold(predicted), '. ');
+    if (regression) {
+      const actual = parseFloat(row[model.target]);
+      summary.append(isNaN(actual) ? 'This row has no numeric target to compare with.' : `The actual value is ${formatNumber(actual)}, an error of ${formatNumber(Math.abs(actual - trace.leaf.prediction))}.`);
+    } else if (!present(row[model.target])) {
+      summary.append('This row has no target value to compare with.');
+    } else {
+      summary.append('The actual value is ', bold(String(row[model.target])), row[model.target] === trace.leaf.prediction ? ', so the tree gets this row right.' : ', so the tree gets this row wrong.');
+    }
+
+    const list = $('traceSteps');
+    list.textContent = '';
+    const addStep = (n, rule, went) => {
+      const item = document.createElement('li');
+      const number = document.createElement('span');
+      number.className = 'n';
+      number.textContent = n;
+      const text = document.createElement('span');
+      text.className = 'rule';
+      text.textContent = rule;
+      const result = document.createElement('span');
+      result.className = 'went';
+      result.append(...went);
+      item.append(number, text, result);
+      list.append(item);
+    };
+    trace.steps.forEach((step, i) => {
+      const value = present(step.value) ? clip(String(step.value), 18) : 'missing';
+      addStep(i + 1, ruleText(step.node.split, false), [`${value} → `, bold(step.goLeft ? 'yes' : 'no')]);
+    });
+    addStep('→', `Leaf: ${predicted}`, [`n ${integer.format(trace.leaf.samples)}`]);
+
+    const tr = $('previewBody').children[trace.index];
+    if (tr) {
+      tr.classList.add('is-traced');
+      tr.querySelector('.row-pick').setAttribute('aria-pressed', 'true');
+      const wrap = $('tableWrap');
+      const head = $('previewHead').offsetHeight;
+      if (tr.offsetTop - head < wrap.scrollTop || tr.offsetTop + tr.offsetHeight > wrap.scrollTop + wrap.clientHeight) wrap.scrollTop = Math.max(0, tr.offsetTop - head - 44);
+    }
+  }
+
+  function traceRow(index) {
+    if (!model) { setStatus('error', 'Build a tree before tracing a row.'); return; }
+    const found = route(model.tree, dataset[index]);
+    trace = { index, steps: found.steps, leaf: found.leaf, nodes: new Set([...found.steps.map(step => step.node), found.leaf]) };
+    $('rowIndex').value = index + 1;
+    $('rowIndex').removeAttribute('aria-invalid');
+    render();
+    showTrace();
+    syncButtons();
+    const decisions = found.steps.length;
+    setStatus('done', `Row ${index + 1} is highlighted: ${decisions === 0 ? 'the tree is a single leaf' : plural(decisions, 'decision')} to reach the leaf that predicts ${predictionText(found.leaf, model)}.`);
+  }
+
+  function traceFromInput() {
+    const raw = $('rowIndex').value.trim();
+    const number = Number(raw);
+    if (!raw || !Number.isInteger(number) || number < 1 || number > dataset.length) {
+      $('rowIndex').setAttribute('aria-invalid', 'true');
+      setStatus('error', dataset.length
+        ? `There is no row ${raw || '(empty)'}. Enter a whole number from 1 to ${integer.format(dataset.length)}.`
+        : 'Load a dataset before tracing a row.');
+      return;
+    }
+    traceRow(number - 1);
+  }
+
+  /* ------------------------------------------------------------------- Data */
+  function setDataMessage(state, message) {
+    $('dataMsg').dataset.state = state;
+    $('dataMsg').textContent = message;
+  }
+  // A failed load never replaces the data that is already working.
+  function dataError(message) {
+    const kept = dataset.length ? ` The current data (${datasetLabel}) was kept.` : '';
+    setDataMessage('error', message + kept);
+    setStatus('error', message + kept);
+  }
+
+  function loadCSV(text, label) {
+    if (!text || !text.trim()) { dataError(`${label} is empty. It needs a header row followed by data rows.`); return false; }
+    let parsed;
+    try {
+      parsed = Papa.parse(text, {
+        header: true,
+        skipEmptyLines: 'greedy',
+        transformHeader: (name, i) => String(name).trim() || `column_${i + 1}`,
+        transform: value => (typeof value === 'string' ? value.trim() : value),
+      });
+    } catch (error) {
+      dataError(`${label} could not be read as CSV: ${error.message}`);
+      return false;
+    }
+    const fields = (parsed.meta.fields || []).filter(name => name !== '__parsed_extra');
+    const rows = parsed.data.filter(row => Object.values(row).some(v => v !== ''));
+    if (!fields.length) { dataError(`${label} has no header row.`); return false; }
+    if (!rows.length) { dataError(`${label} has a header (${clip(fields.join(', '), 60)}) but no data rows under it.`); return false; }
+    if (fields.length < 2) { dataError(`${label} has a single column (${clip(fields[0], 40)}). A tree needs a target column and at least one feature column. Check that the values are separated by commas, semicolons or tabs.`); return false; }
+
+    const mismatched = parsed.errors.filter(error => error.type === 'FieldMismatch');
+    const quotes = parsed.errors.filter(error => error.type === 'Quotes');
+    parseNotes = [];
+    if (mismatched.length) parseNotes.push(`${plural(mismatched.length, 'row')} ${mismatched.length === 1 ? 'does' : 'do'} not match the header's ${fields.length} columns (first at row ${mismatched[0].row + 1}); their missing cells count as empty.`);
+    if (quotes.length) parseNotes.push(`A quoted field is not closed properly near row ${(quotes[0].row || 0) + 1}, so some rows may be merged.`);
+
+    dataset = rows;
+    headers = fields;
+    datasetLabel = label;
+    const select = $('targetSelect');
+    select.textContent = '';
+    headers.forEach(name => {
+      const option = document.createElement('option');
+      option.value = name;
+      option.textContent = name;
+      select.append(option);
+    });
+    target = headers[headers.length - 1];   // the last column is the usual place for a label
+    select.value = target;
+    $('rowIndex').max = dataset.length;
+    $('rowIndex').value = 1;
+    $('rowIndex').removeAttribute('aria-invalid');
+    $('rowRange').textContent = `1 to ${integer.format(dataset.length)}`;
+    setDataMessage(parseNotes.length ? 'warn' : 'done', `${label}: ${plural(dataset.length, 'row')}, ${plural(headers.length, 'column')}.${parseNotes.length ? ' ' + parseNotes.join(' ') : ''}`);
+    renderPreview();
+    build();
+    return true;
+  }
+
+  function loadSample() {
+    const sample = SAMPLES[$('sampleSelect').value];
+    loadCSV(sample.csv(), sample.label);
+  }
+
+  function readFile(file) {
+    if (!file) return;
+    showSource('upload');
+    if (file.size > MAX_FILE_MB * 1048576) { dataError(`${file.name} is ${(file.size / 1048576).toFixed(0)} MB. This lab reads CSV files up to ${MAX_FILE_MB} MB.`); return; }
+    setDataMessage('idle', `Reading ${file.name}.`);
     const reader = new FileReader();
-    reader.onload = (ev) => loadCSV(ev.target.result);
+    reader.onload = () => loadCSV(String(reader.result), file.name);
+    reader.onerror = () => dataError(`${file.name} could not be read.`);
     reader.readAsText(file);
   }
-});
 
-loadPasteBtn.addEventListener('click', () => {
-  const text = pasteArea.value.trim();
-  if (text) loadCSV(text);
-});
-
-targetSelect.addEventListener('change', () => {
-  target = targetSelect.value;
-  if (target) {
-    detectTask();
-    buildTree();
+  function showSource(name) {
+    document.querySelectorAll('[data-source]').forEach(button => button.setAttribute('aria-pressed', String(button.dataset.source === name)));
+    ['sample', 'upload', 'paste'].forEach(source => { $(`pane-${source}`).hidden = source !== name; });
   }
-});
 
-[criterionSelect, maxDepthInput, minSplitInput, minGainInput].forEach(el => {
-  el.addEventListener('change', () => {
-    if (target && dataset.length > 0) buildTree();
-  });
-});
+  function renderPreview() {
+    const types = detectTypes();
+    const headRow = document.createElement('tr');
+    const corner = document.createElement('th');
+    corner.className = 'idx';
+    corner.scope = 'col';
+    corner.textContent = 'Row';
+    headRow.append(corner);
+    headers.forEach(name => {
+      const th = document.createElement('th');
+      th.scope = 'col';
+      th.textContent = name;
+      const kind = document.createElement('small');
+      kind.textContent = name === target ? 'target' : types[name] || 'empty';
+      if (name === target) th.className = 'is-target';
+      th.append(kind);
+      headRow.append(th);
+    });
+    $('previewHead').replaceChildren(headRow);
 
-buildBtn.addEventListener('click', () => {
-  if (target && dataset.length > 0) buildTree();
-});
-
-exportSvgBtn.addEventListener('click', exportSVG);
-exportJsonBtn.addEventListener('click', exportJSON);
-highlightPathBtn.addEventListener('click', highlightRowPath);
-
-// Load and parse CSV
-function loadCSV(csvText) {
-  Papa.parse(csvText, {
-    header: true,
-    skipEmptyLines: true,
-    complete: (results) => {
-      dataset = results.data.filter(row => Object.values(row).some(v => v !== ''));
-      headers = results.meta.fields || [];
-      
-      targetSelect.innerHTML = '<option value="">Select target...</option>';
-      headers.forEach(h => {
-        const opt = document.createElement('option');
-        opt.value = h;
-        opt.textContent = h;
-        targetSelect.appendChild(opt);
+    const body = document.createDocumentFragment();
+    dataset.slice(0, PREVIEW_ROWS).forEach((row, i) => {
+      const tr = document.createElement('tr');
+      tr.dataset.index = i;
+      const first = document.createElement('td');
+      first.className = 'idx';
+      const pick = document.createElement('button');
+      pick.type = 'button';
+      pick.className = 'row-pick';
+      pick.textContent = i + 1;
+      pick.setAttribute('aria-label', `Trace row ${i + 1} through the tree`);
+      pick.setAttribute('aria-pressed', 'false');
+      first.append(pick);
+      tr.append(first);
+      headers.forEach(name => {
+        const td = document.createElement('td');
+        if (present(row[name])) td.textContent = row[name];
+        else { td.textContent = 'empty'; td.className = 'missing'; }
+        tr.append(td);
       });
-      
-      if (headers.length > 0) {
-        targetSelect.value = headers[headers.length - 1];
-        target = headers[headers.length - 1];
-        detectTask();
-        buildTree();
-      }
-      
-      renderPreview();
-    }
-  });
-}
-
-// Detect task type
-function detectTask() {
-  const values = dataset
-    .map(row => row[target])
-    .filter(v => v !== '' && v != null);
-  
-  const numericCount = values.filter(v => !isNaN(parseFloat(v))).length;
-  const numericRatio = numericCount / values.length;
-  const uniqueCount = new Set(values).size;
-  
-  if (numericRatio >= 0.8 && uniqueCount > 12) {
-    task = 'regression';
-    taskBadge.textContent = 'Regression (MSE)';
-    criterionSelect.disabled = true;
-  } else {
-    task = 'classification';
-    taskBadge.textContent = 'Classification';
-    criterionSelect.disabled = false;
-  }
-}
-
-// Detect feature types
-function detectTypes() {
-  types = {};
-  headers.forEach(col => {
-    if (col === target) return;
-    
-    const values = dataset
-      .map(row => row[col])
-      .filter(v => v !== '' && v != null);
-    
-    if (values.length === 0) return;
-    
-    const numericCount = values.filter(v => !isNaN(parseFloat(v))).length;
-    types[col] = (numericCount / values.length) > 0.7 ? 'numeric' : 'categorical';
-  });
-}
-
-// Calculate impurity
-function calcImpurity(labels, criterion) {
-  if (labels.length === 0) return 0;
-  
-  if (task === 'regression') {
-    const mean = labels.reduce((a, b) => a + b, 0) / labels.length;
-    return labels.reduce((sum, y) => sum + Math.pow(y - mean, 2), 0) / labels.length;
-  } else {
-    const counts = {};
-    labels.forEach(l => counts[l] = (counts[l] || 0) + 1);
-    const probs = Object.values(counts).map(c => c / labels.length);
-    
-    if (criterion === 'gini') {
-      return 1 - probs.reduce((sum, p) => sum + p * p, 0);
-    } else {
-      return -probs.reduce((sum, p) => sum + (p > 0 ? p * Math.log2(p) : 0), 0);
-    }
-  }
-}
-
-// Find best split for numeric feature
-function findNumericSplit(rows, feature, labels, criterion) {
-  const pairs = [];
-  rows.forEach((row, i) => {
-    const val = parseFloat(row[feature]);
-    if (!isNaN(val)) {
-      pairs.push({ val, label: labels[i] });
-    }
-  });
-  
-  if (pairs.length < 2) return null;
-  
-  pairs.sort((a, b) => a.val - b.val);
-  
-  const uniqueVals = [...new Set(pairs.map(p => p.val))].sort((a, b) => a - b);
-  if (uniqueVals.length < 2) return null;
-  
-  let bestGain = -Infinity;
-  let bestThreshold = null;
-  
-  for (let i = 0; i < uniqueVals.length - 1; i++) {
-    const threshold = (uniqueVals[i] + uniqueVals[i + 1]) / 2;
-    const leftLabels = pairs.filter(p => p.val <= threshold).map(p => p.label);
-    const rightLabels = pairs.filter(p => p.val > threshold).map(p => p.label);
-    
-    if (leftLabels.length === 0 || rightLabels.length === 0) continue;
-    
-    const impParent = calcImpurity(labels, criterion);
-    const impLeft = calcImpurity(leftLabels, criterion);
-    const impRight = calcImpurity(rightLabels, criterion);
-    
-    const gain = impParent - (
-      (leftLabels.length / labels.length) * impLeft +
-      (rightLabels.length / labels.length) * impRight
-    );
-    
-    if (gain > bestGain) {
-      bestGain = gain;
-      bestThreshold = threshold;
-    }
-  }
-  
-  return bestThreshold !== null ? { threshold: bestThreshold, gain: bestGain } : null;
-}
-
-// Find best split for categorical feature
-function findCategoricalSplit(rows, feature, labels, criterion) {
-  const categories = [...new Set(rows.map(r => r[feature]).filter(v => v !== '' && v != null))];
-  if (categories.length < 2) return null;
-  
-  let bestGain = -Infinity;
-  let bestCategory = null;
-  
-  categories.forEach(cat => {
-    const leftLabels = [];
-    const rightLabels = [];
-    
-    rows.forEach((row, i) => {
-      if (row[feature] === cat) {
-        leftLabels.push(labels[i]);
-      } else if (row[feature] !== '' && row[feature] != null) {
-        rightLabels.push(labels[i]);
-      }
+      body.append(tr);
     });
-    
-    if (leftLabels.length === 0 || rightLabels.length === 0) return;
-    
-    const impParent = calcImpurity(labels, criterion);
-    const impLeft = calcImpurity(leftLabels, criterion);
-    const impRight = calcImpurity(rightLabels, criterion);
-    
-    const gain = impParent - (
-      (leftLabels.length / labels.length) * impLeft +
-      (rightLabels.length / labels.length) * impRight
-    );
-    
-    if (gain > bestGain) {
-      bestGain = gain;
-      bestCategory = cat;
-    }
+    $('previewBody').replaceChildren(body);
+    $('tableWrap').scrollTop = 0;
+    $('rowsChip').textContent = plural(dataset.length, 'row');
+    $('colsChip').textContent = plural(headers.length, 'column');
+    $('previewCount').textContent = dataset.length > PREVIEW_ROWS ? `Showing the first ${PREVIEW_ROWS} of ${integer.format(dataset.length)} rows. Any row number can still be traced.` : '';
+  }
+
+  /* ---------------------------------------------------------------- Exports */
+  function download(name, text, type) {
+    const url = URL.createObjectURL(new Blob([text], { type }));
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = name;
+    document.body.append(link);
+    link.click();
+    link.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 4000);   // revoking at once can cancel the download
+  }
+
+  // A standalone picture: its own size, background, fonts, colours, caption and key.
+  function exportSVG() {
+    if (!model || !layout) { setStatus('error', 'There is no tree to export yet. Build one first.'); return; }
+    const c = palette();
+    const b = layout.bounds;
+    const margin = 36;
+    const captionH = 44;
+    const keyH = 66;
+    const width = Math.ceil(Math.max(b.w + margin * 2, 560));
+    const height = Math.ceil(b.h + margin * 2 + captionH + keyH);
+    const out = d3.create('svg').attr('width', width).attr('height', height).attr('viewBox', `0 0 ${width} ${height}`).attr('font-family', SANS);
+    out.append('title').text(summaryLabel());
+    const ramp = out.append('defs').append('linearGradient').attr('id', 'impurity-ramp');
+    d3.range(8).forEach(i => ramp.append('stop').attr('offset', `${(i / 7 * 100).toFixed(2)}%`).attr('stop-color', SGLab.ramp(i / 7)));
+    out.append('rect').attr('width', width).attr('height', height).attr('fill', c.plot);
+
+    const s = model.stats;
+    out.append('text').attr('x', margin).attr('y', margin + 8).attr('font-size', 16).attr('font-weight', 600).attr('fill', c.ink)
+      .text(`Decision tree for ${clip(model.target, 48)}`);
+    out.append('text').attr('x', margin).attr('y', margin + 28).attr('font-family', MONO).attr('font-size', 11).attr('fill', c.muted)
+      .text(`${model.task} · ${impurityName(model).toLowerCase()} · ${plural(s.rows, 'row')} · ${plural(s.nodes, 'node')} · ${plural(s.leaves, 'leaf').replace('leafs', 'leaves')} · depth ${s.depth}`);
+
+    drawTree(out.append('g').attr('transform', `translate(${(width - b.w) / 2 - b.x},${margin + captionH - b.y})`), false);
+
+    const key = out.append('g').attr('transform', `translate(${margin},${height - margin - 30})`).attr('font-size', 11.5).attr('fill', c.muted);
+    key.append('text').attr('y', 0).text(`Node colour: ${impurityName(model)}`);
+    key.append('rect').attr('y', 9).attr('width', 180).attr('height', 8).attr('rx', 4).attr('fill', 'url(#impurity-ramp)').attr('stroke', c.cardLine);
+    key.append('text').attr('y', 32).attr('font-family', MONO).attr('font-size', 10.5).text('0 pure');
+    key.append('text').attr('x', 180).attr('y', 32).attr('text-anchor', 'end').attr('font-family', MONO).attr('font-size', 10.5).text(`${formatNumber(layout.maxImpurity)} most mixed`);
+    const shapes = key.append('g').attr('transform', 'translate(224,6)');
+    shapes.append('rect').attr('width', 14).attr('height', 14).attr('rx', 3.5).attr('fill', SGLab.ramp(.45)).attr('stroke', c.ring).attr('stroke-width', 1.5);
+    shapes.append('text').attr('x', 22).attr('y', 11).text('Split');
+    shapes.append('circle').attr('cx', 79).attr('cy', 7).attr('r', 7).attr('fill', SGLab.ramp(.45)).attr('stroke', c.ring).attr('stroke-width', 1.5);
+    shapes.append('text').attr('x', 94).attr('y', 11).text('Leaf');
+    shapes.append('text').attr('x', 0).attr('y', 30).text(`Link width: rows on the branch${trace ? `. Highlight: row ${trace.index + 1}` : ''}`);
+
+    download('decision_tree.svg', `<?xml version="1.0" encoding="UTF-8"?>\n${new XMLSerializer().serializeToString(out.node())}`, 'image/svg+xml');
+    setStatus('done', 'Saved decision_tree.svg. The file carries its own background, colours, fonts and key.');
+  }
+
+  function exportJSON() {
+    if (!model) { setStatus('error', 'There is no tree to export yet. Build one first.'); return; }
+    const opts = { criterion: model.task === 'regression' ? 'mse' : model.criterion, maxDepth: model.opts.maxDepth, minSplit: model.opts.minSplit, minGain: model.opts.minGain };
+    download('decision_tree.json', JSON.stringify({ tree: model.tree, target: model.target, opts, types: model.types, task: model.task }, null, 2), 'application/json');
+    setStatus('done', 'Saved decision_tree.json: the nested tree with its target, settings and column types.');
+  }
+
+  /* ----------------------------------------------------------------- Events */
+  document.querySelectorAll('[data-source]').forEach(button => button.addEventListener('click', () => showSource(button.dataset.source)));
+  $('sampleSelect').addEventListener('change', () => {
+    $('sampleHint').textContent = SAMPLES[$('sampleSelect').value].note;
+    loadSample();
   });
-  
-  return bestCategory !== null ? { category: bestCategory, gain: bestGain } : null;
-}
-
-// Build decision tree
-function buildDecisionTree(rows, depth, criterion, maxDepth, minSplit, minGain) {
-  const labels = task === 'regression'
-    ? rows.map(r => parseFloat(r[target])).filter(v => !isNaN(v))
-    : rows.map(r => r[target]).filter(v => v !== '' && v != null);
-  
-  if (labels.length === 0) {
-    return {
-      type: 'leaf',
-      depth,
-      samples: 0,
-      impurity: 0,
-      prediction: task === 'regression' ? 0 : 'unknown',
-      std: 0
-    };
-  }
-  
-  const impurity = calcImpurity(labels, criterion);
-  
-  if (depth >= maxDepth || rows.length < minSplit) {
-    return makeLeaf(labels, depth, impurity);
-  }
-  
-  if (task === 'classification' && new Set(labels).size === 1) {
-    return makeLeaf(labels, depth, impurity);
-  }
-  
-  let bestSplit = null;
-  let bestFeature = null;
-  let bestType = null;
-  
-  Object.keys(types).forEach(feature => {
-    if (types[feature] === 'numeric') {
-      const split = findNumericSplit(rows, feature, labels, criterion);
-      if (split && split.gain > (bestSplit?.gain || -Infinity)) {
-        bestSplit = split;
-        bestFeature = feature;
-        bestType = 'numeric';
-      }
-    } else {
-      const split = findCategoricalSplit(rows, feature, labels, criterion);
-      if (split && split.gain > (bestSplit?.gain || -Infinity)) {
-        bestSplit = split;
-        bestFeature = feature;
-        bestType = 'categorical';
-      }
-    }
+  $('loadSample').addEventListener('click', loadSample);
+  $('fileInput').addEventListener('change', event => {
+    readFile(event.target.files[0]);
+    event.target.value = '';   // lets the same file be chosen again after it was edited
   });
-  
-  if (!bestSplit || bestSplit.gain < minGain) {
-    return makeLeaf(labels, depth, impurity);
-  }
-  
-  let leftRows, rightRows;
-  
-  if (bestType === 'numeric') {
-    leftRows = rows.filter(r => {
-      const val = parseFloat(r[bestFeature]);
-      return !isNaN(val) && val <= bestSplit.threshold;
-    });
-    rightRows = rows.filter(r => {
-      const val = parseFloat(r[bestFeature]);
-      return !isNaN(val) && val > bestSplit.threshold;
-    });
-  } else {
-    leftRows = rows.filter(r => r[bestFeature] === bestSplit.category);
-    rightRows = rows.filter(r => r[bestFeature] !== bestSplit.category && r[bestFeature] !== '' && r[bestFeature] != null);
-  }
-  
-  if (leftRows.length === 0 || rightRows.length === 0) {
-    return makeLeaf(labels, depth, impurity);
-  }
-  
-  return {
-    type: 'node',
-    depth,
-    samples: labels.length,
-    impurity,
-    split: {
-      feature: bestFeature,
-      type: bestType,
-      threshold: bestSplit.threshold,
-      category: bestSplit.category,
-      gain: bestSplit.gain,
-      impurity
-    },
-    left: buildDecisionTree(leftRows, depth + 1, criterion, maxDepth, minSplit, minGain),
-    right: buildDecisionTree(rightRows, depth + 1, criterion, maxDepth, minSplit, minGain)
-  };
-}
-
-function makeLeaf(labels, depth, impurity) {
-  if (task === 'regression') {
-    const mean = labels.reduce((a, b) => a + b, 0) / labels.length;
-    const variance = labels.reduce((sum, y) => sum + Math.pow(y - mean, 2), 0) / labels.length;
-    const std = Math.sqrt(variance);
-    
-    return {
-      type: 'leaf',
-      depth,
-      samples: labels.length,
-      impurity,
-      prediction: mean,
-      std
-    };
-  } else {
-    const counts = {};
-    labels.forEach(l => counts[l] = (counts[l] || 0) + 1);
-    const prediction = Object.keys(counts).reduce((a, b) => counts[a] > counts[b] ? a : b);
-    
-    return {
-      type: 'leaf',
-      depth,
-      samples: labels.length,
-      impurity,
-      prediction,
-      counts
-    };
-  }
-}
-
-function buildTree() {
-  if (!target || dataset.length === 0) return;
-  
-  detectTypes();
-  
-  if (Object.keys(types).length === 0) {
-    alert('No valid features found for splitting');
-    return;
-  }
-  
-  const criterion = criterionSelect.value;
-  const maxDepth = parseInt(maxDepthInput.value);
-  const minSplit = parseInt(minSplitInput.value);
-  const minGain = parseFloat(minGainInput.value);
-  
-  tree = buildDecisionTree(dataset, 0, criterion, maxDepth, minSplit, minGain);
-  
-  const nodeCount = countNodes(tree);
-  const criterionLabel = task === 'regression' ? 'mse' : criterion;
-  status.textContent = `Built ${task} tree · depth ≤ ${maxDepth} · nodes: ${nodeCount} · criterion: ${criterionLabel}`;
-  
-  renderTree();
-}
-
-function countNodes(node) {
-  if (!node) return 0;
-  return 1 + (node.left ? countNodes(node.left) : 0) + (node.right ? countNodes(node.right) : 0);
-}
-
-function renderTree() {
-  if (!tree) return;
-  
-  const container = document.getElementById('tree-container');
-  const mount = document.getElementById('tree');
-  
-  const containerWidth = container.clientWidth;
-  const containerHeight = container.clientHeight;
-  
-  const nodeCount = countNodes(tree);
-  const width = Math.max(containerWidth, 800);
-  const height = Math.max(containerHeight, nodeCount * 50, 600);
-  
-  d3.select('#tree').selectAll('*').remove();
-  
-  const svg = d3.select('#tree')
-    .attr('width', width)
-    .attr('height', height);
-  
-  const g = svg.append('g')
-    .attr('transform', 'translate(60, 40)');
-  
-  const hierarchyData = d3.hierarchy(tree, d => {
-    const children = [];
-    if (d.left) children.push(d.left);
-    if (d.right) children.push(d.right);
-    return children.length > 0 ? children : null;
+  $('loadPaste').addEventListener('click', () => {
+    if (!loadCSV($('pasteArea').value, 'Pasted CSV')) $('pasteArea').focus();
   });
-  
-  const treeLayout = d3.tree()
-    .size([height - 80, width - 300])
-    .separation((a, b) => (a.parent === b.parent ? 1.2 : 1.5));
-  
-  treeLayout(hierarchyData);
-  
-  const allImpurities = [];
-  hierarchyData.each(d => allImpurities.push(d.data.impurity));
-  const minImp = Math.min(...allImpurities);
-  const maxImp = Math.max(...allImpurities);
-  
-  const colorScale = d3.scaleLinear()
-    .domain([minImp, maxImp])
-    .range(['#8be9a0', '#ff6b6b'])
-    .clamp(true);
-  
-  if (minImp === maxImp) {
-    colorScale.domain([0, 1]).range(['#8be9a0', '#8be9a0']);
-  }
-  
-  g.selectAll('.link')
-    .data(hierarchyData.links())
-    .enter()
-    .append('path')
-    .attr('class', 'link')
-    .attr('d', d3.linkHorizontal()
-      .x(d => d.y)
-      .y(d => d.x));
-  
-  const nodes = g.selectAll('.node')
-    .data(hierarchyData.descendants())
-    .enter()
-    .append('g')
-    .attr('class', 'node')
-    .attr('transform', d => `translate(${d.y},${d.x})`)
-    .on('mouseover', showTooltip)
-    .on('mousemove', moveTooltip)
-    .on('mouseout', hideTooltip);
-  
-  nodes.append('circle')
-    .attr('r', 10)
-    .attr('fill', d => colorScale(d.data.impurity));
-  
-  nodes.append('text')
-    .attr('class', 'label')
-    .attr('dy', -18)
-    .attr('text-anchor', 'middle')
-    .text(d => {
-      if (d.data.type === 'leaf') {
-        const pred = task === 'regression' ? d.data.prediction.toFixed(3) : d.data.prediction;
-        return `Leaf: ${pred}`;
-      } else {
-        const { feature, type, threshold, category } = d.data.split;
-        if (type === 'numeric') {
-          return `${feature} ≤ ${formatNumber(threshold)}`;
-        } else {
-          return `${feature} = ${category}`;
-        }
-      }
-    });
-  
-  nodes.append('text')
-    .attr('class', 'sublabel')
-    .attr('dy', 28)
-    .attr('text-anchor', 'middle')
-    .text(d => {
-      if (d.data.type === 'leaf') {
-        if (task === 'regression') {
-          return `n=${d.data.samples} · σ=${d.data.std.toFixed(2)}`;
-        } else {
-          return `n=${d.data.samples}`;
-        }
-      } else {
-        return `gain=${d.data.split.gain.toFixed(3)} · n=${d.data.samples}`;
-      }
-    });
-  
-  const zoom = d3.zoom()
-    .scaleExtent([0.3, 3])
-    .on('zoom', (event) => {
-      g.attr('transform', event.transform);
-    });
-  
-  svg.call(zoom);
-  
-  treeData = hierarchyData;
-}
-
-function formatNumber(n) {
-  if (Math.abs(n) < 0.001 || Math.abs(n) > 1e6) {
-    return n.toExponential(2);
-  }
-  return n.toFixed(3);
-}
-
-function showTooltip(event, d) {
-  const lines = [];
-  
-  if (d.data.type === 'leaf') {
-    const impLabel = task === 'regression' ? 'MSE' : 'Impurity';
-    lines.push(`<div class="tooltip-row"><span class="tooltip-label">${impLabel}:</span> ${d.data.impurity.toFixed(4)}</div>`);
-    lines.push(`<div class="tooltip-row"><span class="tooltip-label">Samples:</span> ${d.data.samples}</div>`);
-    lines.push(`<div class="tooltip-row"><span class="tooltip-label">Prediction:</span> ${task === 'regression' ? d.data.prediction.toFixed(4) : d.data.prediction}</div>`);
-    
-    if (task === 'classification' && d.data.counts) {
-      lines.push(`<div class="tooltip-row"><span class="tooltip-label">Counts:</span> ${JSON.stringify(d.data.counts)}</div>`);
-    }
-  } else {
-    const { feature, type, threshold, category, gain } = d.data.split;
-    const rule = type === 'numeric' ? `${feature} ≤ ${formatNumber(threshold)}` : `${feature} = ${category}`;
-    const impLabel = task === 'regression' ? 'MSE' : 'Impurity';
-    
-    lines.push(`<div class="tooltip-row"><span class="tooltip-label">Split:</span> ${rule}</div>`);
-    lines.push(`<div class="tooltip-row"><span class="tooltip-label">Gain:</span> ${gain.toFixed(4)}</div>`);
-    lines.push(`<div class="tooltip-row"><span class="tooltip-label">${impLabel}:</span> ${d.data.impurity.toFixed(4)}</div>`);
-    lines.push(`<div class="tooltip-row"><span class="tooltip-label">Samples:</span> ${d.data.samples}</div>`);
-  }
-  
-  tooltip.innerHTML = lines.join('');
-  tooltip.style.display = 'block';
-  moveTooltip(event);
-}
-
-function moveTooltip(event) {
-  tooltip.style.left = (event.pageX + 15) + 'px';
-  tooltip.style.top = (event.pageY + 15) + 'px';
-}
-
-function hideTooltip() {
-  tooltip.style.display = 'none';
-}
-
-function highlightRowPath() {
-  if (!tree || !treeData) return;
-  
-  const idx = parseInt(rowIndexInput.value);
-  if (idx < 0 || idx >= dataset.length) {
-    alert('Invalid row index');
-    return;
-  }
-  
-  const row = dataset[idx];
-  const path = [];
-  
-  function walk(node, hierNode) {
-    path.push(hierNode);
-    
-    if (node.type === 'leaf') return;
-    
-    const { feature, type, threshold, category } = node.split;
-    let goLeft = false;
-    
-    if (type === 'numeric') {
-      const val = parseFloat(row[feature]);
-      goLeft = !isNaN(val) && val <= threshold;
-    } else {
-      goLeft = row[feature] === category;
-    }
-    
-    const nextNode = goLeft ? node.left : node.right;
-    const nextHierNode = hierNode.children ? hierNode.children[goLeft ? 0 : 1] : null;
-    
-    if (nextNode && nextHierNode) {
-      walk(nextNode, nextHierNode);
-    }
-  }
-  
-  walk(tree, treeData);
-  
-  d3.selectAll('.node').classed('highlighted-node', false);
-  d3.selectAll('.link').classed('highlighted', false);
-  
-  path.forEach(n => {
-    d3.selectAll('.node')
-      .filter(d => d === n)
-      .classed('highlighted-node', true);
+  // Without this a file dropped beside the input would replace the page with the file itself.
+  document.addEventListener('dragover', event => event.preventDefault());
+  document.addEventListener('drop', event => {
+    event.preventDefault();
+    readFile(event.dataTransfer && event.dataTransfer.files[0]);
   });
-  
-  for (let i = 0; i < path.length - 1; i++) {
-    d3.selectAll('.link')
-      .filter(l => l.source === path[i] && l.target === path[i + 1])
-      .classed('highlighted', true);
-  }
-}
 
-function renderPreview() {
-  const table = document.getElementById('preview-table');
-  const thead = table.querySelector('thead');
-  const tbody = table.querySelector('tbody');
-  
-  thead.innerHTML = '';
-  tbody.innerHTML = '';
-  
-  if (headers.length === 0) return;
-  
-  const headerRow = document.createElement('tr');
-  headers.forEach(h => {
-    const th = document.createElement('th');
-    th.textContent = h;
-    headerRow.appendChild(th);
+  $('targetSelect').addEventListener('change', event => {
+    target = event.target.value;
+    renderPreview();
+    build();
   });
-  thead.appendChild(headerRow);
-  
-  const previewRows = dataset.slice(0, 200);
-  previewRows.forEach(row => {
-    const tr = document.createElement('tr');
-    headers.forEach(h => {
-      const td = document.createElement('td');
-      td.textContent = row[h] || '';
-      tr.appendChild(td);
-    });
-    tbody.appendChild(tr);
+  document.querySelectorAll('[data-criterion]').forEach(button => button.addEventListener('click', () => {
+    if (criterion === button.dataset.criterion) return;
+    criterion = button.dataset.criterion;
+    build();
+  }));
+  // Small datasets rebuild while the slider moves; slow builds wait until it is released.
+  $('maxDepth').addEventListener('input', event => {
+    $('maxDepthValue').textContent = event.target.value;
+    if (lastBuildMs < 70) build();
   });
-}
+  ['maxDepth', 'minSplit', 'minGain'].forEach(id => $(id).addEventListener('change', () => {
+    readOptions();
+    if (!model || model.key !== settingsKey() || building) build();
+  }));
+  $('build').addEventListener('click', () => (building ? stopBuild() : build()));
+  $('exportSvg').addEventListener('click', exportSVG);
+  $('exportJson').addEventListener('click', exportJSON);
+  $('zoomIn').addEventListener('click', () => zoomBy(1.4));
+  $('zoomOut').addEventListener('click', () => zoomBy(1 / 1.4));
+  $('fit').addEventListener('click', () => fit(true));
 
-function exportSVG() {
-  const svg = document.getElementById('tree');
-  if (!svg || !svg.innerHTML.trim()) {
-    alert('No tree to export');
-    return;
-  }
-  
-  const serializer = new XMLSerializer();
-  const svgStr = serializer.serializeToString(svg);
-  const blob = new Blob([svgStr], { type: 'image/svg+xml' });
-  const url = URL.createObjectURL(blob);
-  
-  const a = document.createElement('a');
-  a.href = url;
-  a.download = 'decision_tree.svg';
-  a.click();
-  
-  URL.revokeObjectURL(url);
-}
+  $('tracePath').addEventListener('click', traceFromInput);
+  $('rowIndex').addEventListener('keydown', event => { if (event.key === 'Enter') traceFromInput(); });
+  $('rowIndex').addEventListener('input', event => event.target.removeAttribute('aria-invalid'));
+  $('clearPath').addEventListener('click', () => {
+    clearTrace();
+    setStatus('idle', 'Highlight cleared. Pick another row to trace.');
+  });
+  $('previewBody').addEventListener('click', event => {
+    const tr = event.target.closest('tr');
+    if (tr) traceRow(Number(tr.dataset.index));
+  });
 
-function exportJSON() {
-  if (!tree) {
-    alert('No tree to export');
-    return;
+  // A tap leaves the tooltip up on touch screens; the next touch anywhere else dismisses it.
+  document.addEventListener('pointerdown', event => { if (!event.target.closest || !event.target.closest('#tree .node')) SGLab.tooltip.hide(); });
+  new ResizeObserver(() => fit(false)).observe(svgEl);
+  SGLab.onTheme(() => render());
+  // Card widths are measured with the interface font, so lay the tree out again once it has arrived.
+  const probe = () => textWidth('petal_length ≤ 4.95', TITLE_FONT);
+  let measured = probe();
+  function fontsChanged() {
+    if (!model || probe() === measured) return;
+    measured = probe();
+    layout = computeLayout(model);
+    render();
+    fit(false);
   }
-  
-  const opts = {
-    criterion: criterionSelect.value,
-    maxDepth: parseInt(maxDepthInput.value),
-    minSplit: parseInt(minSplitInput.value),
-    minGain: parseFloat(minGainInput.value)
-  };
-  
-  const data = {
-    tree,
-    target,
-    opts,
-    types,
-    task
-  };
-  
-  const json = JSON.stringify(data, null, 2);
-  const blob = new Blob([json], { type: 'application/json' });
-  const url = URL.createObjectURL(blob);
-  
-  const a = document.createElement('a');
-  a.href = url;
-  a.download = 'decision_tree.json';
-  a.click();
-  
-  URL.revokeObjectURL(url);
-}
+  if (document.fonts) {
+    document.fonts.ready.then(fontsChanged);
+    document.fonts.addEventListener('loadingdone', fontsChanged);
+  }
+
+  $('scaleBar').style.background = SGLab.rampCSS;
+  $('sampleHint').textContent = SAMPLES[$('sampleSelect').value].note;
+  syncButtons();
+  loadSample();
+})();
 </script>
-
 </body>
 </html>

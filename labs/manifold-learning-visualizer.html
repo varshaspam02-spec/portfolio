@@ -1,733 +1,847 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="en">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Manifold Learning Visualizer</title>
-    <script src="../assets/vendor/three-r128.min.js"></script>
-    <style>
-        * {
-            margin: 0;
-            padding: 0;
-            box-sizing: border-box;
-        }
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Manifold learning visualizer playground | Srinjoy Ghosh</title>
+<link rel="icon" type="image/svg+xml" href="../assets/favicon.svg">
+<link rel="stylesheet" href="../assets/lab.css">
+<script src="../assets/lab-bridge.js"></script>
+<style>
+  /* Twin panels. Side by side, their heads, plots, captions and status bars share grid rows, so the
+     two plots always line up even when one head or status line wraps and the other does not. */
+  .lab-stage{container:stage/inline-size}
+  .views>.panel>.statusbar{margin-top:auto}
+  @supports (grid-template-rows:subgrid){
+    @container stage (min-width:696px){
+      .views{grid-template-columns:repeat(2,minmax(0,1fr));grid-template-rows:repeat(4,auto);row-gap:0}
+      .views>.panel{display:grid;grid-template-rows:subgrid;grid-row:span 4}
+    }
+  }
+  .panel-head .toolbar{min-width:0}
+  .panel-head select{flex:1 1 auto;width:auto;min-width:0;max-width:100%}
+  .panel-foot{display:grid;gap:14px;align-content:start;padding:4px 20px 18px}
+  .panel-foot .explain{min-height:calc(1.7em * 4)}
+  .panel-foot .scale{min-height:40px;align-content:center}
+  .scale-ends{gap:12px}
+  .scale-ends .scale-title{color:var(--ink);text-align:center}
 
-        body {
-            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-            background: linear-gradient(135deg, #0f0c29, #302b63, #24243e);
-            color: white;
-            overflow-x: hidden;
-        }
+  #view3d{touch-action:none;cursor:grab}
+  #view3d.is-dragging{cursor:grabbing}
+  #view2d{cursor:crosshair}
+  .plot>canvas:focus-visible{outline-offset:-5px;border-radius:9px}
+  .plot-chip{position:absolute;top:10px;left:10px;pointer-events:none;background:color-mix(in srgb,var(--plot) 80%,transparent)}
+  .plot-hint{position:absolute;left:14px;right:14px;bottom:10px;font:500 11px/1.4 var(--mono);letter-spacing:.03em;color:var(--faint);pointer-events:none;transition:color .4s}
+  .plot-hint.is-nudged{color:var(--ink)}
 
-        .container {
-            max-width: 1600px;
-            margin: 0 auto;
-            padding: 20px;
-        }
-
-        header {
-            text-align: center;
-            padding: 40px 20px;
-            background: rgba(255, 255, 255, 0.05);
-            backdrop-filter: blur(10px);
-            border-radius: 20px;
-            margin-bottom: 30px;
-            animation: fadeInDown 0.8s ease-out;
-        }
-
-        h1 {
-            font-size: 3em;
-            background: linear-gradient(45deg, #667eea, #764ba2, #f093fb);
-            -webkit-background-clip: text;
-            -webkit-text-fill-color: transparent;
-            background-clip: text;
-            margin-bottom: 10px;
-            animation: gradient 3s ease infinite;
-            background-size: 200% 200%;
-        }
-
-        @keyframes gradient {
-            0% { background-position: 0% 50%; }
-            50% { background-position: 100% 50%; }
-            100% { background-position: 0% 50%; }
-        }
-
-        .subtitle {
-            color: #a0a0a0;
-            font-size: 1.2em;
-        }
-
-        .controls {
-            background: rgba(255, 255, 255, 0.08);
-            backdrop-filter: blur(15px);
-            border-radius: 15px;
-            padding: 25px;
-            margin-bottom: 30px;
-            border: 1px solid rgba(255, 255, 255, 0.1);
-            animation: fadeIn 1s ease-out;
-        }
-
-        .control-grid {
-            display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
-            gap: 20px;
-        }
-
-        .control-group {
-            display: flex;
-            flex-direction: column;
-        }
-
-        label {
-            font-weight: 600;
-            margin-bottom: 8px;
-            font-size: 0.9em;
-            text-transform: uppercase;
-            letter-spacing: 1px;
-            color: #b0b0ff;
-        }
-
-        select, input[type="range"] {
-            padding: 10px;
-            border-radius: 8px;
-            border: 1px solid rgba(255, 255, 255, 0.2);
-            background: rgba(255, 255, 255, 0.1);
-            color: white;
-            font-size: 1em;
-            cursor: pointer;
-            transition: all 0.3s;
-            position: relative;
-            z-index: 100;
-        }
-
-        select:hover, select:focus {
-            background: rgba(255, 255, 255, 0.15);
-            border-color: #667eea;
-            z-index: 200;
-        }
-        
-        select option {
-            background: #1a1a2e;
-            color: white;
-            padding: 10px;
-        }
-
-        input[type="range"] {
-            accent-color: #667eea;
-        }
-
-        .value-display {
-            font-size: 0.9em;
-            color: #ffd700;
-            margin-top: 5px;
-        }
-
-        .visualization-container {
-            display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(600px, 1fr));
-            gap: 30px;
-            margin-bottom: 30px;
-        }
-
-        .viz-box {
-            background: rgba(255, 255, 255, 0.05);
-            backdrop-filter: blur(10px);
-            border-radius: 15px;
-            padding: 20px;
-            border: 1px solid rgba(255, 255, 255, 0.1);
-            animation: fadeInUp 1s ease-out;
-        }
-
-        .viz-header {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            margin-bottom: 15px;
-        }
-
-        .viz-title {
-            font-size: 1.5em;
-            font-weight: 600;
-        }
-
-        .badge {
-            background: linear-gradient(45deg, #667eea, #764ba2);
-            padding: 5px 15px;
-            border-radius: 20px;
-            font-size: 0.8em;
-            font-weight: 600;
-            text-transform: uppercase;
-        }
-
-        canvas {
-            width: 100%;
-            border-radius: 10px;
-            background: #0a0a1a;
-            cursor: grab;
-            box-shadow: 0 10px 40px rgba(0, 0, 0, 0.5);
-        }
-
-        canvas:active {
-            cursor: grabbing;
-        }
-
-        .info-box {
-            background: rgba(102, 126, 234, 0.2);
-            border: 1px solid rgba(102, 126, 234, 0.5);
-            border-radius: 10px;
-            padding: 15px;
-            margin-top: 20px;
-            animation: fadeIn 1.2s ease-out;
-        }
-
-        .info-box strong {
-            color: #ffd700;
-        }
-
-        button {
-            background: linear-gradient(45deg, #667eea, #764ba2);
-            border: none;
-            padding: 10px 20px;
-            border-radius: 8px;
-            color: white;
-            font-weight: 600;
-            cursor: pointer;
-            transition: all 0.3s;
-        }
-
-        button:hover {
-            transform: translateY(-2px);
-            box-shadow: 0 5px 20px rgba(102, 126, 234, 0.5);
-        }
-
-        @keyframes fadeIn {
-            from { opacity: 0; }
-            to { opacity: 1; }
-        }
-
-        @keyframes fadeInDown {
-            from {
-                opacity: 0;
-                transform: translateY(-30px);
-            }
-            to {
-                opacity: 1;
-                transform: translateY(0);
-            }
-        }
-
-        @keyframes fadeInUp {
-            from {
-                opacity: 0;
-                transform: translateY(30px);
-            }
-            to {
-                opacity: 1;
-                transform: translateY(0);
-            }
-        }
-
-        .algorithm-info {
-            margin-top: 20px;
-            padding: 15px;
-            background: rgba(255, 255, 255, 0.05);
-            border-radius: 10px;
-            font-size: 0.9em;
-            line-height: 1.6;
-        }
-
-        @media (max-width: 768px) {
-            .visualization-container {
-                grid-template-columns: 1fr;
-            }
-            
-            h1 {
-                font-size: 2em;
-            }
-        }
-    </style>
-<link rel="stylesheet" href="../assets/lab-theme.css">
-<script defer src="../assets/lab-bridge.js"></script>
+  details.group{display:block}
+  details.group>.explain{margin-top:16px}
+  .explain p+p{margin-top:12px}
+  .vh{position:absolute;width:1px;height:1px;margin:-1px;padding:0;border:0;overflow:hidden;clip-path:inset(50%);white-space:nowrap}
+  @media(max-width:520px){.panel-foot{padding:2px 16px 16px}}
+</style>
 </head>
 <body>
-<aside class="sg-context-note">Concept demonstration: the original demo uses handcrafted geometric projections. The Isomap, MDS, spectral, and t-SNE labels are illustrative; these are not numerical implementations of those algorithms.</aside>
-    <div class="container">
-        <header>
-            <h1>🌀 Manifold Learning Visualizer</h1>
-            <p class="subtitle">Explore dimensionality reduction algorithms with interactive 3D visualizations</p>
-        </header>
+<div class="lab">
+  <header class="lab-head">
+    <div><a class="lab-back" href="../spaces/manifold-learning-visualizer/index.html">&larr; Back to portfolio</a><h1>Manifold learning visualizer</h1></div>
+  </header>
 
-        <div class="controls">
-            <div class="control-grid">
-                <div class="control-group">
-                    <label>Algorithm</label>
-                    <select id="algorithm">
-                        <option value="isomap">Isomap Embedding</option>
-                        <option value="mds">Multidimensional Scaling</option>
-                        <option value="spectral">Spectral Embedding</option>
-                        <option value="tsne">t-SNE</option>
-                    </select>
-                </div>
+  <aside class="lab-note">Concept demonstration: the original demo uses handcrafted geometric projections. The Isomap, MDS, spectral, and t-SNE labels are illustrative; these are not numerical implementations of those algorithms.</aside>
 
-                <div class="control-group">
-                    <label>Dataset</label>
-                    <select id="dataset">
-                        <option value="s-curve">S-Curve</option>
-                        <option value="swiss-roll">Swiss Roll</option>
-                        <option value="sphere">Sphere</option>
-                        <option value="severed-sphere">Severed Sphere</option>
-                    </select>
-                </div>
-
-                <div class="control-group">
-                    <label>Number of Samples</label>
-                    <input type="range" id="samples" min="500" max="3000" value="1500" step="100">
-                    <div class="value-display" id="samplesValue">1500</div>
-                </div>
-
-                <div class="control-group">
-                    <label>Noise Level</label>
-                    <input type="range" id="noise" min="0" max="0.5" value="0" step="0.05">
-                    <div class="value-display" id="noiseValue">0.00</div>
-                </div>
-            </div>
-
-            <div style="margin-top: 20px; display: flex; gap: 10px;">
-                <button onclick="resetView()">🔄 Reset View</button>
-                <button onclick="toggleAutoRotate()">⏸️ Toggle Rotation</button>
-                <button onclick="regenerate()">🎲 Regenerate</button>
-            </div>
+  <div class="lab-app">
+    <aside class="lab-side">
+      <section class="group" aria-labelledby="g-sampling">
+        <h2 class="group-title" id="g-sampling">Sampling</h2>
+        <div class="field">
+          <label for="samples">Samples</label><output id="samplesValue" for="samples">1,500</output>
+          <input type="range" id="samples" min="500" max="3000" step="100" value="1500">
         </div>
+        <div class="field">
+          <label for="noise">Noise</label><output id="noiseValue" for="noise">0.00</output>
+          <input type="range" id="noise" min="0" max="0.5" step="0.05" value="0">
+          <p class="hint">Noise moves every coordinate by a random offset of up to half this amount. Sliding it rescales the same draw, so you can watch the surface thicken.</p>
+        </div>
+        <button class="btn btn-block" type="button" id="regenerate"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 7h4l10 10h4m-3-3 3 3-3 3M3 17h4l3-3m4-4 3-3h4m-3-3 3 3-3 3"/></svg>Regenerate</button>
+      </section>
 
-        <div class="visualization-container">
-            <div class="viz-box">
-                <div class="viz-header">
-                    <div class="viz-title">Original 3D Data</div>
-                    <div class="badge">Interactive 3D</div>
-                </div>
-                <div id="canvas3d"></div>
-                <div style="color: #888; font-size: 0.85em; margin-top: 10px; text-align: center;">
-                    🖱️ Drag to rotate • Scroll to zoom
-                </div>
+      <section class="group" aria-labelledby="g-geometry">
+        <h2 class="group-title" id="g-geometry">Geometry</h2>
+        <div class="stat-grid">
+          <div class="stat"><span class="stat-label">Samples</span><span class="stat-value" id="statSamples">0</span></div>
+          <div class="stat"><span class="stat-label">Noise</span><span class="stat-value" id="statNoise">0.00</span></div>
+          <div class="stat"><span class="stat-label">Intrinsic dimension</span><span class="stat-value">2</span></div>
+          <div class="stat"><span class="stat-label">Ambient dimension</span><span class="stat-value">3</span></div>
+        </div>
+        <p class="hint">Two numbers place a point on the surface. Three coordinates store it in space.</p>
+      </section>
+
+      <details class="group">
+        <summary><h2 class="group-title">How to read this</h2></summary>
+        <div class="explain">
+          <p><strong>Intrinsic versus extrinsic dimensionality.</strong> Every point on the left is stored as three coordinates, yet two numbers are enough to say where it sits on the surface. The surface is two-dimensional on the inside and only lives in three dimensions.</p>
+          <p><strong>Neighborhoods, geodesic distances, and embeddings.</strong> On the Swiss roll, two turns can be close through the air and far apart along the sheet. The distance along the sheet is the geodesic distance. An embedding gives every point new 2D coordinates, and the question is which kind of closeness survives. Hover a point to ring the same point in the other view, and use the shared color to see whether neighbors stay together.</p>
+          <p><strong>Why nonlinear structure can be lost in a simple projection.</strong> The MDS-style mapping is a fixed linear projection, so it can only show a shadow of the shape. Parts that overlap in the shadow are drawn on top of each other and their colors mix. The angle-based mappings pull the surface open instead, at the price of a seam where the angle wraps around.</p>
+        </div>
+      </details>
+    </aside>
+
+    <main class="lab-stage">
+      <div class="stage-grid views">
+        <section class="panel" aria-labelledby="h-3d">
+          <div class="panel-head">
+            <h2 id="h-3d">Original 3D data</h2>
+            <div class="toolbar">
+              <label class="vh" for="dataset">Dataset</label>
+              <select id="dataset">
+                <option value="s-curve">S-curve</option>
+                <option value="swiss-roll">Swiss roll</option>
+                <option value="sphere">Sphere</option>
+                <option value="severed-sphere">Severed sphere</option>
+              </select>
             </div>
-
-            <div class="viz-box">
-                <div class="viz-header">
-                    <div class="viz-title">2D Embedding</div>
-                    <div class="badge" id="algorithmBadge">Isomap</div>
-                </div>
-                <canvas id="canvas2d" width="800" height="600"></canvas>
+          </div>
+          <div class="plot">
+            <canvas id="view3d" tabindex="0" role="img" aria-label="3D scatter plot of the sampled surface."></canvas>
+            <span class="chip plot-chip">Interactive 3D</span>
+            <span class="plot-hint" id="hint3d">Drag to rotate · Ctrl + scroll to zoom</span>
+          </div>
+          <div class="panel-foot">
+            <div class="toolbar">
+              <button class="btn" type="button" id="resetView"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 4v6h6"/><path d="M4.5 15a8.5 8.5 0 1 0 1.9-8.6L3 10"/></svg>Reset view</button>
+              <button class="btn" type="button" id="toggleRotate"><svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path id="rotateIcon" d="M7 5h3.5v14H7zm6.5 0H17v14h-3.5z"/></svg><span id="rotateLabel">Pause rotation</span></button>
             </div>
-        </div>
+            <p class="explain" id="datasetText"></p>
+          </div>
+          <div class="statusbar" id="status" role="status" aria-live="polite">Hover a point to find the same point in the other view.</div>
+        </section>
 
-        <div class="info-box">
-            <strong>💡 How it works:</strong> Manifold learning algorithms reduce high-dimensional data to lower dimensions while preserving important geometric properties. The left panel shows the original 3D manifold structure, while the right panel displays the 2D embedding. Colors help track how points are mapped between dimensions.
-        </div>
+        <section class="panel" aria-labelledby="h-2d">
+          <div class="panel-head">
+            <h2 id="h-2d">2D mapping</h2>
+            <div class="toolbar">
+              <label class="vh" for="mapping">Illustrative mapping</label>
+              <select id="mapping">
+                <option value="isomap">Isomap-style unrolling</option>
+                <option value="mds">MDS-style linear projection</option>
+                <option value="spectral">Spectral-style angular warp</option>
+                <option value="tsne">t-SNE-style twist</option>
+              </select>
+            </div>
+          </div>
+          <div class="plot">
+            <canvas id="view2d" role="img" aria-label="2D scatter plot of the same points after the illustrative mapping."></canvas>
+            <span class="chip plot-chip" id="mappingChip">Isomap-style · illustrative</span>
+          </div>
+          <div class="panel-foot">
+            <div class="scale">
+              <div class="scale-bar" id="scaleBar"></div>
+              <div class="scale-ends"><span id="scaleStart"></span><span class="scale-title" id="scaleTitle"></span><span id="scaleEnd"></span></div>
+            </div>
+            <p class="explain" id="mappingText"></p>
+          </div>
+          <div class="statusbar" id="mappingStatus"></div>
+        </section>
+      </div>
+    </main>
+  </div>
+</div>
 
-        <div class="algorithm-info" id="algorithmInfo">
-            <strong>Isomap:</strong> Preserves geodesic distances along the manifold, unfolding the structure while maintaining local neighborhood relationships.
-        </div>
-    </div>
+<script>
+(() => {
+  'use strict';
+  const $ = id => document.getElementById(id);
+  const TAU = Math.PI * 2;
+  const SIZE = 600;                   // both plots share one logical square
+  const RAMP_LO = 0.24;               // the ramp's darkest steps sink into the plot surface, and here every point has to stay visible
+  const LEVELS = 64, FOGS = 8, FOG_MAX = 0.3;
+  const BUCKETS = 256;
+  const SPIN = 0.2;                   // auto-rotation in radians per second
+  const ZOOM_MIN = 0.6, ZOOM_MAX = 2.6;
+  const PITCH_MAX = Math.PI / 2 - 0.02;
+  const clamp = (value, lo, hi) => Math.min(hi, Math.max(lo, value));
+  const whole = new Intl.NumberFormat('en');
+  const signed = value => value.toFixed(2).replace('-', '−');
+  const coarse = matchMedia('(pointer: coarse)').matches;
 
-    <script>
-        // Global variables
-        let scene, camera, renderer, sphereGroup, autoRotate = true;
-        let data3D = [], data2D = [];
-        
-        const algorithmDescriptions = {
-            isomap: "Preserves geodesic distances along the manifold, unfolding the structure while maintaining local neighborhood relationships.",
-            mds: "Attempts to preserve pairwise distances between all points, finding a lower-dimensional representation that minimizes stress.",
-            spectral: "Uses eigenvectors of a graph Laplacian to embed the data, revealing the underlying manifold structure.",
-            tsne: "Emphasizes preserving local neighborhood structure while allowing distant points to separate, good for visualization."
-        };
+  /* ------------------------------------------------------------- Datasets */
+  // `radius` is the furthest a noise-free point sits from the origin and `disc` the reference grid's
+  // radius; together they set the zoom so the shape fills the plot at every rotation.
+  const DATASETS = {
+    's-curve': {
+      name: 'S-curve', on: 'on the S-curve',
+      text: 'A flat strip bent into an S and sampled at random across its width. Two numbers place any point on it: how far along the S it sits, and how far across the strip.',
+      scale: ['start of the S', 'position along the S', 'end of the S'],
+      readout: p => `${Math.round(p * 100)}% along the S`,
+      radius: 2.24, disc: 1.7, yTip: 2.3, view: { yaw: -0.72, pitch: 0.3 },
+    },
+    'swiss-roll': {
+      name: 'Swiss roll', on: 'on the Swiss roll',
+      text: 'A flat sheet rolled into a spiral. Neighboring turns sit close together through the air, yet they are far apart for anyone who has to walk along the sheet.',
+      scale: ['inner end', 'position along the roll', 'outer end'],
+      readout: p => `${Math.round(p * 100)}% along the roll`,
+      radius: 2.03, disc: 2.1, yTip: 1.35, view: { yaw: 0.5, pitch: 0.62 },
+    },
+    sphere: {
+      name: 'Sphere', on: 'on the sphere',
+      text: 'Points spread evenly over a closed sphere. It is two-dimensional like the others, but it has no edge, so every flat map of it has to tear it or fold it over somewhere.',
+      scale: ['+z pole', 'angle from the +z pole', '−z pole'],
+      readout: p => `${Math.round(p * 180)}° from the +z pole`,
+      radius: 1.5, disc: 1.8, yTip: 1.8, view: { yaw: -0.6, pitch: 0.34 },
+    },
+    'severed-sphere': {
+      name: 'Severed sphere', on: 'on the severed sphere',
+      text: 'The same sphere with both polar caps cut away, which leaves a band around the z axis. Unlike the closed sphere, a band has edges and can be laid flat as a ring without tearing.',
+      scale: ['0°', 'angle around the band', '360°'],
+      readout: p => `${Math.round(p * 360)}° around the band`,
+      radius: 1.5, disc: 1.8, yTip: 1.8, view: { yaw: -0.8, pitch: 0.34 },
+    },
+  };
 
-        // Initialize Three.js scene
-        function init3D() {
-            const container = document.getElementById('canvas3d');
-            const width = container.clientWidth;
-            const height = 600;
-
-            scene = new THREE.Scene();
-            scene.background = new THREE.Color(0x0a0a1a);
-
-            camera = new THREE.PerspectiveCamera(75, width / height, 0.1, 1000);
-            camera.position.z = 5;
-
-            renderer = new THREE.WebGLRenderer({ antialias: true });
-            renderer.setSize(width, height);
-            container.appendChild(renderer.domElement);
-
-            // Add lights
-            const ambientLight = new THREE.AmbientLight(0xffffff, 0.8);
-            scene.add(ambientLight);
-
-            const pointLight = new THREE.PointLight(0xffffff, 0.5);
-            pointLight.position.set(10, 10, 10);
-            scene.add(pointLight);
-
-            // Add axes helper
-            const axesHelper = new THREE.AxesHelper(3);
-            scene.add(axesHelper);
-
-            // Add grid
-            const gridHelper = new THREE.GridHelper(10, 10, 0x444444, 0x222222);
-            scene.add(gridHelper);
-
-            // Mouse controls
-            let isDragging = false;
-            let previousMousePosition = { x: 0, y: 0 };
-
-            renderer.domElement.addEventListener('mousedown', (e) => {
-                isDragging = true;
-                previousMousePosition = { x: e.clientX, y: e.clientY };
-            });
-
-            renderer.domElement.addEventListener('mousemove', (e) => {
-                if (isDragging && sphereGroup) {
-                    const deltaX = e.clientX - previousMousePosition.x;
-                    const deltaY = e.clientY - previousMousePosition.y;
-
-                    sphereGroup.rotation.y += deltaX * 0.01;
-                    sphereGroup.rotation.x += deltaY * 0.01;
-
-                    previousMousePosition = { x: e.clientX, y: e.clientY };
-                }
-            });
-
-            renderer.domElement.addEventListener('mouseup', () => {
-                isDragging = false;
-            });
-
-            renderer.domElement.addEventListener('wheel', (e) => {
-                e.preventDefault();
-                camera.position.z += e.deltaY * 0.01;
-                camera.position.z = Math.max(2, Math.min(10, camera.position.z));
-            });
+  // Every point keeps the random numbers it was drawn with, so the noise slider rescales the same
+  // draw instead of reshuffling the whole cloud. The model itself is unchanged: each coordinate
+  // gets a uniform offset of (random - 0.5) * noise.
+  function sampleSurface(type, n) {
+    const make = () => new Float32Array(n);
+    const s = { x: make(), y: make(), z: make(), nx: make(), ny: make(), nz: make(), pos: make() };
+    const put = (i, x, y, z, pos) => {
+      s.x[i] = x; s.y[i] = y; s.z[i] = z; s.pos[i] = pos;
+      s.nx[i] = Math.random() - 0.5; s.ny[i] = Math.random() - 0.5; s.nz[i] = Math.random() - 0.5;
+    };
+    switch (type) {
+      case 's-curve':
+        for (let i = 0; i < n; i++) {
+          // One phase for the sign and the trigonometry keeps the S in one piece, and the strip's
+          // width is drawn independently of the position along it, so this is a surface rather
+          // than a single diagonal thread across it.
+          const t = (i / n) * 3 * Math.PI - 1.5 * Math.PI;
+          put(i, Math.sin(t), Math.sign(t) * (Math.cos(t) - 1), Math.random() * 2 - 1, i / n);
         }
-
-        // Generate datasets
-        function generateDataset(type, n, noiseLevel) {
-            const points = [];
-            
-            switch(type) {
-                case 's-curve':
-                    for (let i = 0; i < n; i++) {
-                        const t = (i / n) * 3 * Math.PI;
-                        const x = Math.sin(t);
-                        const y = Math.sign(t - Math.PI * 1.5) * (Math.cos(t) - 1);
-                        const z = (i / n) * 2 - 1;
-                        points.push({
-                            x: x + (Math.random() - 0.5) * noiseLevel,
-                            y: y + (Math.random() - 0.5) * noiseLevel,
-                            z: z + (Math.random() - 0.5) * noiseLevel,
-                            color: i / n
-                        });
-                    }
-                    break;
-                    
-                case 'swiss-roll':
-                    for (let i = 0; i < n; i++) {
-                        const t = 1.5 * Math.PI * (1 + 2 * i / n);
-                        const x = t * Math.cos(t) / 8;
-                        const y = (i / n) * 2 - 1;
-                        const z = t * Math.sin(t) / 8;
-                        points.push({
-                            x: x + (Math.random() - 0.5) * noiseLevel,
-                            y: y + (Math.random() - 0.5) * noiseLevel,
-                            z: z + (Math.random() - 0.5) * noiseLevel,
-                            color: i / n
-                        });
-                    }
-                    break;
-                    
-                case 'sphere':
-                    for (let i = 0; i < n; i++) {
-                        const theta = Math.random() * 2 * Math.PI;
-                        const phi = Math.acos(2 * Math.random() - 1);
-                        const r = 1.5;
-                        points.push({
-                            x: r * Math.sin(phi) * Math.cos(theta) + (Math.random() - 0.5) * noiseLevel,
-                            y: r * Math.sin(phi) * Math.sin(theta) + (Math.random() - 0.5) * noiseLevel,
-                            z: r * Math.cos(phi) + (Math.random() - 0.5) * noiseLevel,
-                            color: phi / Math.PI
-                        });
-                    }
-                    break;
-                    
-                case 'severed-sphere':
-                    for (let i = 0; i < n; i++) {
-                        const theta = Math.random() * 2 * Math.PI;
-                        const phi = Math.acos(2 * Math.random() - 1);
-                        if (phi < Math.PI * 0.25 || phi > Math.PI * 0.75) {
-                            i--;
-                            continue;
-                        }
-                        const r = 1.5;
-                        points.push({
-                            x: r * Math.sin(phi) * Math.cos(theta) + (Math.random() - 0.5) * noiseLevel,
-                            y: r * Math.sin(phi) * Math.sin(theta) + (Math.random() - 0.5) * noiseLevel,
-                            z: r * Math.cos(phi) + (Math.random() - 0.5) * noiseLevel,
-                            color: theta / (2 * Math.PI)
-                        });
-                    }
-                    break;
-            }
-            
-            return points;
+        break;
+      case 'swiss-roll':
+        for (let i = 0; i < n; i++) {
+          const t = 1.5 * Math.PI * (1 + 2 * i / n);
+          put(i, t * Math.cos(t) / 8, Math.random() * 2 - 1, t * Math.sin(t) / 8, i / n);
         }
-
-        // Apply manifold learning
-        function applyManifoldLearning(points, algo) {
-            const embedded = [];
-            
-            switch(algo) {
-                case 'isomap':
-                    points.forEach((p) => {
-                        const angle = Math.atan2(p.z, p.x);
-                        const dist = Math.sqrt(p.x * p.x + p.z * p.z);
-                        embedded.push({
-                            x: angle * 2 + dist * 0.3,
-                            y: p.y * 1.5,
-                            color: p.color
-                        });
-                    });
-                    break;
-                    
-                case 'mds':
-                    points.forEach((p) => {
-                        embedded.push({
-                            x: p.x * 1.5 + p.z * 0.8,
-                            y: p.y * 1.5 + p.x * 0.3,
-                            color: p.color
-                        });
-                    });
-                    break;
-                    
-                case 'spectral':
-                    points.forEach((p) => {
-                        const r = Math.sqrt(p.x * p.x + p.z * p.z);
-                        const theta = Math.atan2(p.z, p.x);
-                        embedded.push({
-                            x: Math.cos(theta * 1.5) * (r * 2 + 1),
-                            y: Math.sin(theta * 1.5) * (r * 2 + 1) + p.y * 0.5,
-                            color: p.color
-                        });
-                    });
-                    break;
-                    
-                case 'tsne':
-                    points.forEach((p) => {
-                        const angle = Math.atan2(p.z, p.x) + p.y * 0.5;
-                        const r = Math.sqrt(p.x * p.x + p.z * p.z) * 1.5;
-                        embedded.push({
-                            x: Math.cos(angle) * (r + 1),
-                            y: Math.sin(angle) * (r + 1),
-                            color: p.color
-                        });
-                    });
-                    break;
-            }
-            
-            return embedded;
+        break;
+      case 'sphere':
+        for (let i = 0; i < n; i++) {
+          const theta = Math.random() * 2 * Math.PI;
+          const phi = Math.acos(2 * Math.random() - 1);
+          const r = 1.5;
+          put(i, r * Math.sin(phi) * Math.cos(theta), r * Math.sin(phi) * Math.sin(theta), r * Math.cos(phi), phi / Math.PI);
         }
-
-        // Color mapping - returns RGB array
-        function getColorRGB(value) {
-            const colors = [
-                [255, 0, 0],     // Red
-                [255, 127, 0],   // Orange
-                [255, 255, 0],   // Yellow
-                [0, 255, 0],     // Green
-                [0, 255, 255],   // Cyan
-                [0, 0, 255],     // Blue
-                [255, 0, 255]    // Magenta
-            ];
-            
-            const idx = value * (colors.length - 1);
-            const i1 = Math.floor(idx);
-            const i2 = Math.min(i1 + 1, colors.length - 1);
-            const t = idx - i1;
-            
-            const r = colors[i1][0] * (1 - t) + colors[i2][0] * t;
-            const g = colors[i1][1] * (1 - t) + colors[i2][1] * t;
-            const b = colors[i1][2] * (1 - t) + colors[i2][2] * t;
-            
-            return [r / 255, g / 255, b / 255];
+        break;
+      case 'severed-sphere':
+        for (let i = 0; i < n;) {
+          const theta = Math.random() * 2 * Math.PI;
+          const phi = Math.acos(2 * Math.random() - 1);
+          if (phi < Math.PI * 0.25 || phi > Math.PI * 0.75) continue;   // rejected draws do not count, so exactly n survive
+          const r = 1.5;
+          put(i++, r * Math.sin(phi) * Math.cos(theta), r * Math.sin(phi) * Math.sin(theta), r * Math.cos(phi), theta / (2 * Math.PI));
         }
+        break;
+    }
+    return s;
+  }
 
-        // Update 3D visualization
-        function update3D(points) {
-            if (sphereGroup) {
-                scene.remove(sphereGroup);
-            }
+  /* ------------------------------------------------------------- Mappings */
+  // Handcrafted formulas, exactly as in the original demo. None of them is the algorithm it is named after.
+  const MAPPINGS = {
+    isomap: {
+      name: 'Isomap-style unrolling', chip: 'Isomap-style', real: 'Isomap', free: true,
+      axes: ['u = 2θ + 0.3r', 'v = 1.5y'],
+      text: 'Plots the angle θ around the vertical y axis against the height y, which opens up a surface that curls around that axis (r is the distance from it). Isomap aims for a similar picture by measuring distances along the surface. This is one fixed formula, not that computation.',
+      map(x, y, z, i) {
+        const angle = Math.atan2(z, x);
+        const dist = Math.sqrt(x * x + z * z);
+        U[i] = angle * 2 + dist * 0.3;
+        V[i] = y * 1.5;
+      },
+    },
+    mds: {
+      name: 'MDS-style linear projection', chip: 'MDS-style', real: 'MDS', free: false,
+      axes: ['u = 1.5x + 0.8z', 'v = 1.5y + 0.3x'],
+      text: 'A fixed linear projection: u and v are weighted sums of x, y and z, like a shadow on a wall. Classical MDS on straight-line distances also ends up linear, which is why it cannot unfold a curved surface. Overlaps in the shadow are overlaps in the map.',
+      map(x, y, z, i) {
+        U[i] = x * 1.5 + z * 0.8;
+        V[i] = y * 1.5 + x * 0.3;
+      },
+    },
+    spectral: {
+      name: 'Spectral-style angular warp', chip: 'Spectral-style', real: 'spectral embedding', free: false,
+      axes: ['u = (2r + 1) cos 1.5θ', 'v = (2r + 1) sin 1.5θ + 0.5y'],
+      text: 'Multiplies the angle θ around the y axis by 1.5, pushes points outward by their distance r from that axis and adds half the height. It imitates the smooth, curled coordinates that graph Laplacian eigenvectors tend to give. No graph or eigenvector is computed here.',
+      map(x, y, z, i) {
+        const r = Math.sqrt(x * x + z * z);
+        const theta = Math.atan2(z, x);
+        U[i] = Math.cos(theta * 1.5) * (r * 2 + 1);
+        V[i] = Math.sin(theta * 1.5) * (r * 2 + 1) + y * 0.5;
+      },
+    },
+    tsne: {
+      name: 't-SNE-style twist', chip: 't-SNE-style', real: 't-SNE', free: false,
+      axes: ['u = (1.5r + 1) cos(θ + 0.5y)', 'v = (1.5r + 1) sin(θ + 0.5y)'],
+      text: 'Shifts the angle θ around the y axis by half the height and pushes points outward by their distance r from it, which twists the surface into a pinwheel. It imitates how t-SNE keeps neighbors together while bending the overall shape. Nothing is optimised here.',
+      map(x, y, z, i) {
+        const angle = Math.atan2(z, x) + y * 0.5;
+        const r = Math.sqrt(x * x + z * z) * 1.5;
+        U[i] = Math.cos(angle) * (r + 1);
+        V[i] = Math.sin(angle) * (r + 1);
+      },
+    },
+  };
 
-            sphereGroup = new THREE.Group();
-            
-            const sphereGeometry = new THREE.SphereGeometry(0.025, 8, 8);
-            
-            points.forEach(p => {
-                const rgb = getColorRGB(p.color);
-                const material = new THREE.MeshPhongMaterial({
-                    color: new THREE.Color(rgb[0], rgb[1], rgb[2]),
-                    emissive: new THREE.Color(rgb[0] * 0.3, rgb[1] * 0.3, rgb[2] * 0.3)
-                });
-                
-                const sphere = new THREE.Mesh(sphereGeometry, material);
-                sphere.position.set(p.x, p.y, p.z);
-                sphereGroup.add(sphere);
-            });
+  /* ---------------------------------------------------------------- State */
+  let dataset = 's-curve', mapping = 'isomap', noise = 0;
+  let N = 0, base = null;
+  let X, Y, Z, U, V, LEVEL, SHUFFLE;        // current 3D coordinates, mapped 2D coordinates, colour level, 2D paint order
+  let SX, SY, SR, SD, KEY, ORDER;           // 3D view: projected position, radius, depth and paint order
+  let PX, PY;                               // 2D view: projected position
+  let box = { u0: -1, u1: 1, v0: -1, v1: 1 };
+  let yaw = DATASETS[dataset].view.yaw, pitch = DATASETS[dataset].view.pitch, zoom = 1;
+  let autoRotate = !SGLab.reducedMotion;
+  let hovered = -1, pinned = -1;
+  let inside3 = false;                      // a mouse resting on the 3D plot holds the rotation so points can be inspected
+  let tween = null;
+  let frame = 0, lastTime = 0, dirty3 = true, dirty2 = true, onScreen = true;
+  let lut = [], chrome = {};
+  let qx = 0, qy = 0, qz = 0;               // scratch output of project()
+  const counts = new Uint32Array(BUCKETS), starts = new Uint32Array(BUCKETS);
 
-            scene.add(sphereGroup);
-        }
+  const canvas3 = $('view3d'), canvas2 = $('view2d');
+  let v3, v2;
+  try {
+    v3 = SGLab.fitCanvas(canvas3, SIZE, SIZE, () => draw3D());
+    v2 = SGLab.fitCanvas(canvas2, SIZE, SIZE, () => draw2D());
+  } catch (error) {
+    SGLab.status($('status'), 'error', 'This browser could not create the drawing surfaces, so the plots cannot be shown.');
+    return;
+  }
 
-        // Draw 2D visualization
-        function draw2D(points) {
-            const canvas = document.getElementById('canvas2d');
-            const ctx = canvas.getContext('2d');
-            const width = canvas.width;
-            const height = canvas.height;
+  /* ----------------------------------------------------------------- Data */
+  function resample(message) {
+    const n = parseInt($('samples').value, 10);
+    base = sampleSurface(dataset, n);
+    N = n;
+    const make = () => new Float32Array(N);
+    X = make(); Y = make(); Z = make(); U = make(); V = make();
+    SX = make(); SY = make(); SR = make(); SD = make(); PX = make(); PY = make();
+    LEVEL = new Uint8Array(N); KEY = new Uint16Array(N); ORDER = new Uint32Array(N); SHUFFLE = new Uint32Array(N);
+    for (let i = 0; i < N; i++) { LEVEL[i] = Math.round(base.pos[i] * (LEVELS - 1)); SHUFFLE[i] = i; }
+    // The 2D view paints in random order, so where parts of the surface overlap neither one hides the other.
+    for (let i = N - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); const swap = SHUFFLE[i]; SHUFFLE[i] = SHUFFLE[j]; SHUFFLE[j] = swap; }
+    hovered = -1; pinned = -1;
+    SGLab.tooltip.hide();
+    applyNoise();
+    setStatus(message ? 'done' : 'idle', message || summary());
+  }
 
-            ctx.fillStyle = '#0a0a1a';
-            ctx.fillRect(0, 0, width, height);
+  function applyNoise() {
+    for (let i = 0; i < N; i++) {
+      X[i] = base.x[i] + base.nx[i] * noise;
+      Y[i] = base.y[i] + base.ny[i] * noise;
+      Z[i] = base.z[i] + base.nz[i] * noise;
+    }
+    remap();
+  }
 
-            // Find bounds
-            let minX = Infinity, maxX = -Infinity;
-            let minY = Infinity, maxY = -Infinity;
-            points.forEach(p => {
-                minX = Math.min(minX, p.x);
-                maxX = Math.max(maxX, p.x);
-                minY = Math.min(minY, p.y);
-                maxY = Math.max(maxY, p.y);
-            });
+  function remap() {
+    const map = MAPPINGS[mapping].map;
+    let u0 = Infinity, u1 = -Infinity, v0 = Infinity, v1 = -Infinity;
+    for (let i = 0; i < N; i++) {
+      map(X[i], Y[i], Z[i], i);
+      if (U[i] < u0) u0 = U[i];
+      if (U[i] > u1) u1 = U[i];
+      if (V[i] < v0) v0 = V[i];
+      if (V[i] > v1) v1 = V[i];
+    }
+    box = { u0, u1, v0, v1 };
+    refresh();
+  }
 
-            const padding = 80;
-            const scaleX = (width - 2 * padding) / (maxX - minX);
-            const scaleY = (height - 2 * padding) / (maxY - minY);
-            const scale = Math.min(scaleX, scaleY) * 0.8;
+  /* -------------------------------------------------------------- Colours */
+  function toRGB(value) {
+    const probe = document.createElement('canvas').getContext('2d');
+    probe.fillStyle = '#0b0d16';
+    probe.fillStyle = value;                 // normalises any opaque CSS colour to #rrggbb
+    return [1, 3, 5].map(i => parseInt(probe.fillStyle.slice(i, i + 2), 16));
+  }
+  // lut[fog][level]: the sequential ramp, faded toward the plot surface with distance. Row 0 has no
+  // fade; the 2D view and the legend use it, so a point wears the same colour in both views.
+  function buildColours() {
+    chrome = { ink: SGLab.ink(), muted: SGLab.muted(), grid: SGLab.grid(), axis: SGLab.axis(), plot: SGLab.plot() };
+    const plot = toRGB(chrome.plot);
+    lut = [];
+    for (let f = 0; f < FOGS; f++) {
+      const fade = FOG_MAX * f / (FOGS - 1), row = [];
+      for (let l = 0; l < LEVELS; l++) {
+        const c = SGLab.rampRGB(RAMP_LO + (1 - RAMP_LO) * l / (LEVELS - 1));
+        row.push(`rgb(${c.map((v, k) => Math.round(v + (plot[k] - v) * fade)).join(',')})`);
+      }
+      lut.push(row);
+    }
+    $('scaleBar').style.background = `linear-gradient(90deg,${Array.from({ length: 9 }, (_, k) => lut[0][Math.round(k / 8 * (LEVELS - 1))]).join(',')})`;
+  }
 
-            // Draw grid
-            ctx.strokeStyle = 'rgba(255, 255, 255, 0.1)';
-            ctx.lineWidth = 1;
-            for (let i = 0; i <= 10; i++) {
-                const x = padding + (width - 2 * padding) * i / 10;
-                const y = padding + (height - 2 * padding) * i / 10;
-                ctx.beginPath();
-                ctx.moveTo(x, padding);
-                ctx.lineTo(x, height - padding);
-                ctx.stroke();
-                ctx.beginPath();
-                ctx.moveTo(padding, y);
-                ctx.lineTo(width - padding, y);
-                ctx.stroke();
-            }
+  const dotRadius = view => view.mark(clamp(3.2 * Math.pow(1500 / N, 0.4), 2.3, 4.2));
+  const labelFont = view => `500 ${view.px(11)}px "Geist Mono", ui-monospace, Consolas, monospace`;
 
-            // Draw axes
-            ctx.strokeStyle = 'rgba(255, 255, 255, 0.3)';
-            ctx.lineWidth = 2;
-            const centerX = width / 2;
-            const centerY = height / 2;
-            ctx.beginPath();
-            ctx.moveTo(padding, centerY);
-            ctx.lineTo(width - padding, centerY);
-            ctx.moveTo(centerX, padding);
-            ctx.lineTo(centerX, height - padding);
-            ctx.stroke();
+  function ringMark(ctx, view, x, y, r, level, strong) {
+    ctx.beginPath();
+    ctx.arc(x, y, r * 1.25, 0, TAU);
+    ctx.fillStyle = lut[0][level];
+    ctx.fill();
+    ctx.beginPath();
+    ctx.arc(x, y, r * 1.25 + view.px(4), 0, TAU);
+    ctx.lineWidth = view.px(strong ? 5 : 4);
+    ctx.strokeStyle = chrome.plot;
+    ctx.stroke();
+    ctx.lineWidth = view.px(strong ? 2 : 1.5);
+    ctx.strokeStyle = chrome.ink;
+    ctx.stroke();
+  }
+  const marked = () => (pinned >= 0 && pinned !== hovered ? [pinned, hovered] : [hovered]).filter(i => i >= 0 && i < N);
 
-            // Draw points with glow effect
-            points.forEach(p => {
-                const sx = width / 2 + (p.x - (minX + maxX) / 2) * scale;
-                const sy = height / 2 - (p.y - (minY + maxY) / 2) * scale;
-                
-                const rgb = getColorRGB(p.color);
-                const rgbColor = `rgb(${rgb[0] * 255},${rgb[1] * 255},${rgb[2] * 255})`;
-                
-                // Glow
-                ctx.shadowBlur = 10;
-                ctx.shadowColor = rgbColor;
-                
-                ctx.fillStyle = rgbColor;
-                ctx.beginPath();
-                ctx.arc(sx, sy, 4, 0, Math.PI * 2);
-                ctx.fill();
-            });
-            
-            ctx.shadowBlur = 0;
-        }
+  /* -------------------------------------------------------------- 3D view */
+  function draw3D() {
+    if (!N || !lut.length) return;
+    const ctx = v3.ctx, set = DATASETS[dataset], half = SIZE / 2;
+    v3.begin();
+    // A sphere of radius R around the origin holds the data at every rotation. The camera sits 4.2 R
+    // away, and the focal length is chosen so that sphere just fits inside the plot's margin.
+    const R = Math.max(set.radius + 0.12 + noise * 0.35, set.disc * 0.98);
+    const D = R * 4.2;
+    const F = 0.92 * half * Math.sqrt(D * D - R * R) / R * zoom;
+    const cy = Math.cos(yaw), sy = Math.sin(yaw), cp = Math.cos(pitch), sp = Math.sin(pitch);
+    const project = (x, y, z) => {
+      const x1 = x * cy + z * sy, z1 = z * cy - x * sy;
+      const y2 = y * cp - z1 * sp;
+      qz = y * sp + z1 * cp;
+      const s = F / (D - qz);
+      qx = half + x1 * s;
+      qy = half - y2 * s;
+    };
+    const line = (ax, ay, az, bx, by, bz) => { project(ax, ay, az); ctx.moveTo(qx, qy); project(bx, by, bz); ctx.lineTo(qx, qy); };
 
-        // Animation loop
-        function animate() {
-            requestAnimationFrame(animate);
+    // Reference disc on the y = 0 plane and the three axes: recessive hairlines behind the data.
+    const disc = set.disc, tip = disc + 0.12;
+    ctx.lineWidth = v3.px(1);
+    ctx.strokeStyle = chrome.grid;
+    ctx.beginPath();
+    for (let k = 1; k * 0.5 < disc; k++) {
+      const a = k * 0.5, b = Math.sqrt(disc * disc - a * a);
+      line(a, 0, -b, a, 0, b); line(-a, 0, -b, -a, 0, b);
+      line(-b, 0, a, b, 0, a); line(-b, 0, -a, b, 0, -a);
+    }
+    for (let k = 0; k <= 96; k++) {
+      project(Math.cos(k / 96 * TAU) * disc, 0, Math.sin(k / 96 * TAU) * disc);
+      if (k) ctx.lineTo(qx, qy); else ctx.moveTo(qx, qy);
+    }
+    ctx.stroke();
+    ctx.strokeStyle = chrome.axis;
+    ctx.beginPath();
+    line(-disc, 0, 0, tip, 0, 0);
+    line(0, 0, -disc, 0, 0, tip);
+    line(0, -set.yTip, 0, 0, set.yTip, 0);
+    ctx.stroke();
 
-            if (sphereGroup && autoRotate) {
-                sphereGroup.rotation.y += 0.003;
-                sphereGroup.rotation.x += 0.001;
-            }
+    // Axis names sit just past the tips. One that points away from the viewer is painted before the
+    // data, so the surface can pass in front of it; one that points at the viewer is painted after.
+    const labels = [['x', tip + 0.16, 0, 0], ['y', 0, set.yTip + 0.17, 0], ['z', 0, 0, tip + 0.16]].map(([text, x, y, z]) => { project(x, y, z); return { text, x: qx, y: qy, near: qz > 0 }; });
+    const drawLabels = near => {
+      ctx.font = labelFont(v3);
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.lineJoin = 'round';
+      ctx.lineWidth = v3.px(3);
+      ctx.strokeStyle = chrome.plot;
+      ctx.fillStyle = chrome.ink;
+      labels.forEach(label => { if (label.near === near) { ctx.strokeText(label.text, label.x, label.y); ctx.fillText(label.text, label.x, label.y); } });
+    };
+    drawLabels(false);
 
-            renderer.render(scene, camera);
-        }
+    // Project every point, then bucket by depth so the far side is painted first.
+    const r0 = dotRadius(v3);
+    const nearest = D - R * 1.35, span = R * 2.7;
+    counts.fill(0);
+    for (let i = 0; i < N; i++) {
+      project(X[i], Y[i], Z[i]);
+      const depth = D - qz;
+      SX[i] = qx; SY[i] = qy; SD[i] = depth; SR[i] = r0 * D / depth * Math.sqrt(zoom);
+      const k = clamp(Math.floor((depth - nearest) / span * BUCKETS), 0, BUCKETS - 1);
+      KEY[i] = k;
+      counts[k]++;
+    }
+    for (let k = BUCKETS - 1, total = 0; k >= 0; k--) { starts[k] = total; total += counts[k]; }
+    for (let i = 0; i < N; i++) ORDER[starts[KEY[i]]++] = i;
 
-        // Control functions
-        function resetView() {
-            if (sphereGroup) {
-                sphereGroup.rotation.set(0, 0, 0);
-            }
-            camera.position.set(0, 0, 5);
-        }
+    // Depth cues: far points are smaller and fade a little toward the surface; near ones cover them.
+    ctx.lineWidth = v3.px(1.1);
+    ctx.strokeStyle = chrome.plot;
+    const front = D - R, depthSpan = 2 * R;
+    for (let j = 0; j < N; j++) {
+      const i = ORDER[j];
+      const fog = clamp(Math.round((SD[i] - front) / depthSpan * (FOGS - 1)), 0, FOGS - 1);
+      ctx.fillStyle = lut[fog][LEVEL[i]];
+      ctx.beginPath();
+      ctx.arc(SX[i], SY[i], SR[i], 0, TAU);
+      ctx.fill();
+      ctx.stroke();
+    }
+    drawLabels(true);
+    marked().forEach(i => ringMark(ctx, v3, SX[i], SY[i], SR[i], LEVEL[i], i === hovered));
+  }
 
-        function toggleAutoRotate() {
-            autoRotate = !autoRotate;
-        }
+  function pick3(event) {
+    const p = v3.toLogical(event), slop = v3.px(3);
+    // Whatever is painted on top under the pointer wins; failing that, the closest point nearby.
+    let best = -1, bestDepth = Infinity;
+    for (let i = 0; i < N; i++) {
+      if (SD[i] < bestDepth && Math.hypot(SX[i] - p.x, SY[i] - p.y) <= SR[i] + slop) { bestDepth = SD[i]; best = i; }
+    }
+    if (best >= 0) return best;
+    let reach = v3.px(14);
+    for (let i = 0; i < N; i++) {
+      const d = Math.hypot(SX[i] - p.x, SY[i] - p.y);
+      if (d < reach) { reach = d; best = i; }
+    }
+    return best;
+  }
 
-        function regenerate() {
-            updateVisualization();
-        }
+  /* -------------------------------------------------------------- 2D view */
+  function niceStep(range) {
+    const rough = range / 7, power = Math.pow(10, Math.floor(Math.log10(rough))), unit = rough / power;
+    return (unit < 1.5 ? 1 : unit < 3.5 ? 2 : unit < 7.5 ? 5 : 10) * power;
+  }
 
-        function updateVisualization() {
-            const algorithm = document.getElementById('algorithm').value;
-            const dataset = document.getElementById('dataset').value;
-            const samples = parseInt(document.getElementById('samples').value);
-            const noise = parseFloat(document.getElementById('noise').value);
+  function draw2D() {
+    if (!N || !lut.length) return;
+    const ctx = v2.ctx, map = MAPPINGS[mapping];
+    v2.begin();
+    // Margins are in screen pixels: the top one clears the chip, the others hold the axis formulas.
+    const left = v2.px(38), right = v2.px(18), top = v2.px(46), bottom = v2.px(36);
+    const w = SIZE - left - right, h = SIZE - top - bottom;
+    const r = dotRadius(v2), inset = r + v2.px(5);
+    const du = Math.max(box.u1 - box.u0, 1e-6), dv = Math.max(box.v1 - box.v0, 1e-6);
+    // Both axes of the other mappings are lengths, so they share one scale and circles stay round.
+    // The Isomap-style axes are an angle and a height, which have no common scale, so each fills its side.
+    let ku = (w - 2 * inset) / du, kv = (h - 2 * inset) / dv;
+    if (!map.free) ku = kv = Math.min(ku, kv);
+    const uc = (box.u0 + box.u1) / 2, vc = (box.v0 + box.v1) / 2;
+    const cx = left + w / 2, cy = top + h / 2;
+    const px = u => cx + (u - uc) * ku, py = v => cy - (v - vc) * kv;
 
-            document.getElementById('algorithmBadge').textContent = algorithm.toUpperCase();
-            document.getElementById('algorithmInfo').innerHTML = 
-                `<strong>${algorithm.charAt(0).toUpperCase() + algorithm.slice(1)}:</strong> ${algorithmDescriptions[algorithm]}`;
+    ctx.lineWidth = v2.px(1);
+    ctx.strokeStyle = chrome.grid;
+    ctx.beginPath();
+    const uLo = uc - w / 2 / ku, uHi = uc + w / 2 / ku, vLo = vc - h / 2 / kv, vHi = vc + h / 2 / kv;
+    const uStep = niceStep(uHi - uLo), vStep = niceStep(vHi - vLo);
+    for (let u = Math.ceil(uLo / uStep) * uStep; u <= uHi; u += uStep) { ctx.moveTo(px(u), top); ctx.lineTo(px(u), top + h); }
+    for (let v = Math.ceil(vLo / vStep) * vStep; v <= vHi; v += vStep) { ctx.moveTo(left, py(v)); ctx.lineTo(left + w, py(v)); }
+    ctx.stroke();
+    ctx.strokeStyle = chrome.axis;
+    ctx.beginPath();
+    if (uLo < 0 && uHi > 0) { ctx.moveTo(px(0), top); ctx.lineTo(px(0), top + h); }
+    if (vLo < 0 && vHi > 0) { ctx.moveTo(left, py(0)); ctx.lineTo(left + w, py(0)); }
+    ctx.stroke();
 
-            data3D = generateDataset(dataset, samples, noise);
-            data2D = applyManifoldLearning(data3D, algorithm);
+    // The axis titles are the handcrafted formulas themselves.
+    ctx.font = labelFont(v2);
+    ctx.fillStyle = chrome.muted;
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText(map.axes[0], cx, SIZE - v2.px(17));
+    ctx.save();
+    ctx.translate(v2.px(18), cy);
+    ctx.rotate(-Math.PI / 2);
+    ctx.fillText(map.axes[1], 0, 0);
+    ctx.restore();
 
-            update3D(data3D);
-            draw2D(data2D);
-        }
+    ctx.lineWidth = v2.px(1.1);
+    ctx.strokeStyle = chrome.plot;
+    for (let j = 0; j < N; j++) {
+      const i = SHUFFLE[j];
+      const x = PX[i] = px(U[i]), y = PY[i] = py(V[i]);
+      ctx.fillStyle = lut[0][LEVEL[i]];
+      ctx.beginPath();
+      ctx.arc(x, y, r, 0, TAU);
+      ctx.fill();
+      ctx.stroke();
+    }
+    marked().forEach(i => ringMark(ctx, v2, PX[i], PY[i], r, LEVEL[i], i === hovered));
+  }
 
-        // Event listeners
-        document.getElementById('algorithm').addEventListener('change', updateVisualization);
-        document.getElementById('dataset').addEventListener('change', updateVisualization);
-        document.getElementById('samples').addEventListener('input', (e) => {
-            document.getElementById('samplesValue').textContent = e.target.value;
-            updateVisualization();
-        });
-        document.getElementById('noise').addEventListener('input', (e) => {
-            document.getElementById('noiseValue').textContent = parseFloat(e.target.value).toFixed(2);
-            updateVisualization();
-        });
+  function pick2(event) {
+    const p = v2.toLogical(event);
+    let best = -1, reach = v2.px(14);
+    for (let i = 0; i < N; i++) {
+      const d = Math.hypot(PX[i] - p.x, PY[i] - p.y);
+      if (d < reach) { reach = d; best = i; }
+    }
+    return best;
+  }
 
-        // Initialize
-        window.addEventListener('load', () => {
-            init3D();
-            updateVisualization();
-            animate();
-        });
+  /* ----------------------------------------------------------------- Loop */
+  // One requestAnimationFrame handle for everything. request() is a no-op while a frame is already
+  // queued, so toggling rotation or dragging can never stack a second loop.
+  const spinning = () => autoRotate && !inside3 && !active.size && !tween;
+  function request() {
+    if (!frame && !document.hidden && onScreen) frame = requestAnimationFrame(tick);
+  }
+  function refresh() { dirty3 = dirty2 = true; request(); }
+  function tick(now) {
+    frame = 0;
+    const dt = Math.min(0.05, Math.max(0, (now - lastTime) / 1000));
+    lastTime = now;
+    if (tween) {
+      const t = clamp((now - tween.start) / tween.duration, 0, 1), e = 1 - Math.pow(1 - t, 3);
+      yaw = tween.yaw + tween.dYaw * e;
+      pitch = tween.pitch + tween.dPitch * e;
+      zoom = tween.zoom + tween.dZoom * e;
+      if (t >= 1) tween = null;
+      dirty3 = true;
+    } else if (spinning()) {
+      yaw = (yaw + SPIN * dt) % TAU;
+      dirty3 = true;
+    }
+    if (dirty3) { dirty3 = false; draw3D(); }
+    if (dirty2) { dirty2 = false; draw2D(); }
+    if (tween || spinning()) request();
+  }
 
-        // Handle window resize
-        window.addEventListener('resize', () => {
-            const container = document.getElementById('canvas3d');
-            const width = container.clientWidth;
-            const height = 600;
+  function flyTo(target) {
+    const dYaw = (((target.yaw - yaw) % TAU) + TAU * 1.5) % TAU - Math.PI;   // the short way round
+    if (SGLab.reducedMotion) {
+      tween = null;
+      yaw += dYaw; pitch = target.pitch; zoom = 1;
+    } else {
+      tween = { start: performance.now(), duration: 560, yaw, pitch, zoom, dYaw, dPitch: target.pitch - pitch, dZoom: 1 - zoom };
+    }
+    dirty3 = true;
+    request();
+  }
 
-            camera.aspect = width / height;
-            camera.updateProjectionMatrix();
-            renderer.setSize(width, height);
-        });
-    </script>
+  /* ------------------------------------------------------------ Interface */
+  function setStatus(state, message) { SGLab.status($('status'), state, message); }
+  function summary() {
+    return `${whole.format(N)} points sampled ${DATASETS[dataset].on}${noise ? `, noise ${noise.toFixed(2)}` : ''}. ${coarse ? 'Tap' : 'Hover'} a point to find it in the other view${coarse ? '' : '; click to pin it'}.`;
+  }
+
+  function describe() {
+    const set = DATASETS[dataset], map = MAPPINGS[mapping];
+    $('datasetText').textContent = set.text;
+    $('mappingText').textContent = map.text;
+    $('mappingChip').textContent = `${map.chip} · illustrative`;
+    $('mappingStatus').textContent = `Illustrative formula, not a numerical ${map.real}.`;
+    $('scaleStart').textContent = set.scale[0];
+    $('scaleTitle').textContent = set.scale[1];
+    $('scaleEnd').textContent = set.scale[2];
+    $('statSamples').textContent = whole.format(N);
+    $('statNoise').textContent = noise.toFixed(2);
+    canvas3.setAttribute('aria-label', `3D scatter plot of ${whole.format(N)} points sampled ${set.on}. Color runs from dark at the ${set.scale[0]} to light at the ${set.scale[2]}. Drag or use the arrow keys to rotate, and plus or minus to zoom.`);
+    canvas2.setAttribute('aria-label', `2D scatter plot of the same ${whole.format(N)} points under the ${map.name}, an illustrative handcrafted mapping. Colors match the 3D view.`);
+  }
+
+  function tipHTML(i) {
+    return `<div class="tip-row"><i style="--c:${lut[0][LEVEL[i]]}"></i><b>${DATASETS[dataset].readout(base.pos[i])}</b></div>`
+      + `<div class="tip-muted">3D&ensp;x ${signed(X[i])} · y ${signed(Y[i])} · z ${signed(Z[i])}</div>`
+      + `<div class="tip-muted">2D&ensp;u ${signed(U[i])} · v ${signed(V[i])}</div>`;
+  }
+  function hover(index, event) {
+    if (index !== hovered) { hovered = index; refresh(); }
+    if (index < 0) SGLab.tooltip.hide(); else SGLab.tooltip.show(event.clientX, event.clientY, tipHTML(index));
+  }
+  // A click or tap pins a point, so it stays ringed in both views while the 3D view is turned.
+  function pin(index, event) {
+    pinned = index < 0 || index === pinned ? -1 : index;
+    if (pinned >= 0) {
+      setStatus('idle', `Pinned the point ${DATASETS[dataset].readout(base.pos[pinned])}. It stays ringed in both views; ${coarse ? 'tap' : 'click'} empty space to release it.`);
+      if (event.pointerType === 'touch') SGLab.tooltip.show(event.clientX, event.clientY, tipHTML(pinned));
+    } else {
+      setStatus('idle', summary());
+      if (event.pointerType === 'touch') SGLab.tooltip.hide();
+    }
+    refresh();
+  }
+
+  $('dataset').addEventListener('change', event => {
+    dataset = event.target.value;
+    resample();
+    describe();
+    flyTo(DATASETS[dataset].view);
+  });
+  $('mapping').addEventListener('change', event => {
+    mapping = event.target.value;
+    remap();
+    describe();
+    setStatus('idle', `Same points, now shown through the ${MAPPINGS[mapping].name.replace(/^./, c => c.toLowerCase() === 't' ? c : c)}.`);
+  });
+  $('samples').addEventListener('input', event => {
+    $('samplesValue').textContent = whole.format(parseInt(event.target.value, 10));
+    resample();
+    describe();
+  });
+  $('noise').addEventListener('input', event => {
+    noise = parseFloat(event.target.value);
+    $('noiseValue').textContent = noise.toFixed(2);
+    applyNoise();
+    describe();
+    setStatus('idle', summary());
+  });
+  $('regenerate').addEventListener('click', () => {
+    resample(`New sample drawn: ${whole.format(parseInt($('samples').value, 10))} points ${DATASETS[dataset].on}.`);
+    describe();
+  });
+  $('resetView').addEventListener('click', () => {
+    flyTo(DATASETS[dataset].view);
+    setStatus('idle', 'View reset to the default angle and zoom.');
+  });
+  function showRotation() {
+    $('rotateLabel').textContent = autoRotate ? 'Pause rotation' : 'Start rotation';
+    $('rotateIcon').setAttribute('d', autoRotate ? 'M7 5h3.5v14H7zm6.5 0H17v14h-3.5z' : 'M8 5v14l11-7z');
+  }
+  $('toggleRotate').addEventListener('click', () => {
+    autoRotate = !autoRotate;
+    showRotation();
+    setStatus('idle', autoRotate ? 'Rotation on. It holds while the pointer rests on the plot.' : 'Rotation paused. Drag the plot to turn it yourself.');
+    lastTime = performance.now();
+    request();
+  });
+
+  /* ----------------------------------------------------- 3D pointer input */
+  const active = new Map();          // pointers currently pressed on the 3D plot
+  let gesture = null;
+  canvas3.addEventListener('pointerdown', event => {
+    if (event.pointerType === 'mouse' && event.button !== 0) return;
+    try { canvas3.setPointerCapture(event.pointerId); } catch { /* The pointer may already be gone. */ }
+    active.set(event.pointerId, { x: event.clientX, y: event.clientY });
+    if (active.size === 1) gesture = { travel: 0, moved: false };
+    else if (gesture) gesture.moved = true;          // a second finger is a pinch, never a tap
+    tween = null;
+    canvas3.classList.add('is-dragging');
+  });
+  canvas3.addEventListener('pointermove', event => {
+    const held = active.get(event.pointerId);
+    if (!held) {
+      if (event.pointerType !== 'touch' && !active.size) hover(pick3(event), event);
+      return;
+    }
+    const dx = event.clientX - held.x, dy = event.clientY - held.y;
+    if (active.size === 1 && gesture) {
+      gesture.travel += Math.abs(dx) + Math.abs(dy);
+      if (!gesture.moved && gesture.travel > 4) { gesture.moved = true; hover(-1, event); }
+      if (gesture.moved) {
+        yaw = (yaw + dx * 0.01) % TAU;
+        pitch = clamp(pitch + dy * 0.01, -PITCH_MAX, PITCH_MAX);
+      }
+    } else if (active.size === 2) {
+      const other = [...active].find(([id]) => id !== event.pointerId)[1];
+      const before = Math.hypot(held.x - other.x, held.y - other.y), after = Math.hypot(event.clientX - other.x, event.clientY - other.y);
+      if (before > 0) zoom = clamp(zoom * after / before, ZOOM_MIN, ZOOM_MAX);
+    }
+    held.x = event.clientX;
+    held.y = event.clientY;
+    dirty3 = true;
+    request();
+  });
+  function release(event) {
+    if (!active.delete(event.pointerId)) return;
+    if (active.size) return;
+    canvas3.classList.remove('is-dragging');
+    if (gesture && !gesture.moved && event.type === 'pointerup') pin(pick3(event), event);
+    gesture = null;
+    lastTime = performance.now();
+    request();
+  }
+  ['pointerup', 'pointercancel', 'lostpointercapture'].forEach(type => canvas3.addEventListener(type, release));
+  canvas3.addEventListener('pointerenter', event => { if (event.pointerType !== 'touch') inside3 = true; });
+  canvas3.addEventListener('pointerleave', event => {
+    if (event.pointerType === 'touch') return;
+    inside3 = false;
+    hover(-1, event);
+    lastTime = performance.now();
+    request();
+  });
+
+  // Zoom only with Ctrl or Cmd held (a trackpad pinch arrives that way too), so a plain scroll that
+  // happens to cross the plot keeps scrolling the page.
+  let hintTimer = 0, lastHint = 0;
+  canvas3.addEventListener('wheel', event => {
+    if (!event.ctrlKey && !event.metaKey) {
+      const now = performance.now();
+      if (now - lastHint > 4000) {
+        lastHint = now;
+        setStatus('idle', 'Hold Ctrl while scrolling, or pinch, to zoom the 3D view. A plain scroll moves the page.');
+        $('hint3d').classList.add('is-nudged');
+        clearTimeout(hintTimer);
+        hintTimer = setTimeout(() => $('hint3d').classList.remove('is-nudged'), 1800);
+      }
+      return;
+    }
+    event.preventDefault();
+    zoom = clamp(zoom * Math.exp(-event.deltaY * (event.deltaMode === 1 ? 0.05 : 0.0022)), ZOOM_MIN, ZOOM_MAX);
+    tween = null;
+    dirty3 = true;
+    request();
+  }, { passive: false });
+  // Safari reports a trackpad pinch as gesture events instead of Ctrl + wheel.
+  let gestureZoom = 1;
+  canvas3.addEventListener('gesturestart', event => { event.preventDefault(); gestureZoom = zoom; });
+  canvas3.addEventListener('gesturechange', event => {
+    event.preventDefault();
+    if (active.size >= 2) return;                    // touch pinches are already handled as pointers
+    zoom = clamp(gestureZoom * event.scale, ZOOM_MIN, ZOOM_MAX);
+    dirty3 = true;
+    request();
+  });
+  canvas3.addEventListener('keydown', event => {
+    const turn = event.shiftKey ? 0.05 : 0.15;
+    switch (event.key) {
+      case 'ArrowLeft': yaw -= turn; break;
+      case 'ArrowRight': yaw += turn; break;
+      case 'ArrowUp': pitch = clamp(pitch - turn, -PITCH_MAX, PITCH_MAX); break;
+      case 'ArrowDown': pitch = clamp(pitch + turn, -PITCH_MAX, PITCH_MAX); break;
+      case '+': case '=': zoom = clamp(zoom * 1.15, ZOOM_MIN, ZOOM_MAX); break;
+      case '-': case '_': zoom = clamp(zoom / 1.15, ZOOM_MIN, ZOOM_MAX); break;
+      case '0': case 'Home': flyTo(DATASETS[dataset].view); event.preventDefault(); return;
+      case 'Escape': pinned = -1; dirty2 = true; setStatus('idle', summary()); break;
+      default: return;
+    }
+    event.preventDefault();
+    tween = null;
+    dirty3 = true;
+    request();
+  });
+
+  /* ----------------------------------------------------- 2D pointer input */
+  canvas2.addEventListener('pointermove', event => { if (event.pointerType !== 'touch') hover(pick2(event), event); });
+  canvas2.addEventListener('pointerleave', event => { if (event.pointerType !== 'touch') hover(-1, event); });
+  canvas2.addEventListener('click', event => pin(pick2(event), event));
+
+  // A tooltip left behind by a tap goes away as soon as the reader moves on.
+  addEventListener('scroll', () => SGLab.tooltip.hide(), { passive: true });
+  document.addEventListener('pointerdown', event => { if (event.target !== canvas3 && event.target !== canvas2) SGLab.tooltip.hide(); });
+
+  /* ------------------------------------------------------------ Lifecycle */
+  document.addEventListener('visibilitychange', () => {
+    if (document.hidden) { cancelAnimationFrame(frame); frame = 0; } else { lastTime = performance.now(); request(); }
+  });
+  if ('IntersectionObserver' in window) {
+    new IntersectionObserver(entries => {
+      onScreen = entries.some(entry => entry.isIntersecting);
+      if (onScreen) { lastTime = performance.now(); request(); } else { cancelAnimationFrame(frame); frame = 0; }
+    }).observe($('view3d').closest('.views'));
+  }
+  SGLab.onTheme(() => { buildColours(); refresh(); });
+  document.fonts?.ready.then(refresh);
+
+  if (coarse) $('hint3d').textContent = 'Drag to rotate · pinch to zoom';
+  buildColours();
+  showRotation();
+  resample();
+  describe();
+})();
+</script>
 </body>
 </html>

@@ -1,13 +1,17 @@
-"""Import the author's public Google Sites embeds without changing their algorithms.
+"""Fetch the author's original Google Sites embeds for reference.
+
+The playgrounds in labs/ were first imported from these embeds and have since been
+rebuilt by hand on the lab kit (docs/lab-kit.md). They are now maintained in this
+repository, so this script never writes into labs/. It saves the untouched originals
+to a folder outside the repository, which is useful for checking a rebuilt lab's
+behaviour against its source.
 
 The default source is a local audit download. Pass --fetch to download the seven
 original public pages again. Existing vendored dependencies are reused.
 """
 import argparse
-import json
 import re
 import urllib.request
-from html import escape
 from html.parser import HTMLParser
 from pathlib import Path
 from content import LABS
@@ -36,52 +40,45 @@ def fetch(url):
     with urllib.request.urlopen(request, timeout=40) as response:
         return response.read()
 
-def migrate(source, refresh):
-    target = ROOT / 'labs'
+def migrate(source, refresh, out):
+    out = out.resolve()
+    labs = (ROOT / 'labs').resolve()
+    if out == labs or labs in out.parents:
+        raise SystemExit('Refusing to write into labs/: those files are the hand-built playgrounds.')
     vendor = ROOT / 'assets' / 'vendor'
-    target.mkdir(exist_ok=True)
     vendor.mkdir(parents=True, exist_ok=True)
     for url, name in VENDORS.items():
         file = vendor / name
         if not file.exists():
             file.write_bytes(fetch(url))
-    inventory = []
+    out.mkdir(parents=True, exist_ok=True)
+    count = 0
     for lab in LABS:
         slug = lab['slug']
         url = 'https://sites.google.com/view/srinjoy-ghosh/spaces/' + slug
         if refresh:
             parser = Embeds()
-            parser.feed(fetch(url).decode())
+            parser.feed(fetch(url).decode('utf-8'))
             codes = parser.code
         else:
-            codes = [p.read_text() for p in sorted(source.glob(slug + '-embed-*.html'))]
+            codes = [p.read_text(encoding='utf-8') for p in sorted(source.glob(slug + '-embed-*.html'))]
         if not codes:
             raise RuntimeError('No original embed found for ' + slug)
         for i, code in enumerate(codes):
             name = slug + (f'-{i}' if i else '') + '.html'
+            # Point the pinned dependencies at this repository so the original opens offline.
             for external, local in VENDORS.items():
-                code = code.replace(external, '../assets/vendor/' + local)
+                code = code.replace(external, (vendor / local).as_uri())
             code = re.sub(r'<html(?![^>]*\blang=)', '<html lang="en"', code, count=1)
-            theme = '<link rel="stylesheet" href="../assets/lab-theme.css">\n<script defer src="../assets/lab-bridge.js"></script>\n'
-            code = code.replace('</head>', theme + '</head>')
-            if lab['note']:
-                code = code.replace('<body>', '<body>\n<aside class="sg-context-note">' + escape(lab['note']) + '</aside>', 1)
-            # Canvas colors are presentation constants, independent of the math.
-            if slug == 'pca-dimensionality-reduction':
-                code = code.replace("fillStyle = '#ffffff'", "fillStyle = '#0b141e'")
-                code = code.replace("strokeStyle = '#e2e8f0'", "strokeStyle = '#253b49'")
-                code = code.replace("strokeStyle = '#2d3748'", "strokeStyle = '#9dbab6'")
-                code = code.replace("fillStyle = '#2d3748'", "fillStyle = '#b5cec8'")
-            # Each source includes its own complete document and working controls.
-            (target / name).write_text(code)
-            inventory.append({'source':url, 'file':'labs/' + name, 'kind':'original embedded application'})
-    (ROOT / 'docs').mkdir(exist_ok=True)
-    (ROOT / 'docs' / 'lab-provenance.json').write_text(json.dumps(inventory, indent=2) + '\n')
-    print(f'Migrated {len(inventory)} embeds and {len(VENDORS)} pinned dependencies.')
+            with open(out / name, 'w', encoding='utf-8', newline='\n') as f:
+                f.write(code)
+            count += 1
+    print(f'Saved {count} original embeds to {out}. Nothing in labs/ was changed.')
 
 if __name__ == '__main__':
-    p = argparse.ArgumentParser()
+    p = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     p.add_argument('--source', type=Path, default=ROOT.parent / 'source-audit')
+    p.add_argument('--out', type=Path, default=ROOT.parent / 'source-audit' / 'original-embeds')
     p.add_argument('--fetch', action='store_true')
     args = p.parse_args()
-    migrate(args.source, args.fetch)
+    migrate(args.source, args.fetch, args.out)

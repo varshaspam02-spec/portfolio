@@ -61,19 +61,21 @@ The portable preview bundles all pages and lab dependencies into one file. Its l
 
 ## Labs
 
-The original publicly embedded applications were migrated from the author's Google Site into `labs/`. Their numerical algorithms and interactions have been retained. The shared stylesheet and bridge add the new theme, responsive layouts, accessible control names, and iframe resizing.
+The playgrounds began as the embedded applications on the author's Google Site. They have since been rebuilt by hand on a shared lab kit: `assets/lab.css` for the interface and `assets/lab-bridge.js` for data colours, marker shapes, colour ramps, responsive canvases, tooltips and theme sync. `docs/lab-kit.md` documents the kit, and `labs/k-means.html` is the reference implementation. Each lab keeps its original algorithm; the interface, colour encoding, responsiveness and a number of bugs were redone.
+
+Data colours come from a palette validated for colour-vision deficiency and contrast on the plot surface. Clusters and other categories use fixed colours paired with marker shapes, magnitudes use a one-hue ramp, and signed values use a blue to grey to red scale. Interface accents follow the site's accent theme live, even though each lab runs in a sandboxed frame.
 
 Each lab launches on demand to avoid running expensive visualizations in the background. **Open full window** provides a dedicated workspace. CSV input in the tree builder is processed locally in the visitor's browser.
 
 The original manifold demo uses handcrafted geometric projections; it is explicitly labeled as an illustrative concept demo. The attention demo uses simulated patterns and illustrative next-token probabilities. Neither is presented as a trained model or a numerical implementation of the named manifold algorithms.
 
-To intentionally refresh the applications from their original public sources:
+To fetch the untouched originals for comparison:
 
 ```sh
 python scripts/migrate_labs.py --fetch
 ```
 
-This preserves the documented presentation adjustments and vendors the pinned dependencies. Review upstream changes before committing refreshed code. Source URLs and local destinations are recorded in `docs/lab-provenance.json` and `docs/source-inventory.md`.
+This saves them to a folder outside the repository and never writes into `labs/`. Source URLs and local destinations are recorded in `docs/lab-provenance.json` and `docs/source-inventory.md`.
 
 ## Project structure
 
@@ -84,7 +86,7 @@ articles/index.html        Writing
 contact/index.html         Contact
 spaces/index.html          Lab directory
 spaces/*/index.html        Lab introduction and workspace
-labs/*.html                Original interactive applications
+labs/*.html                Interactive playgrounds built on the lab kit
 assets/                    Styles, scripts, fonts, and pinned dependencies
 scripts/                   Content and reproducible page generation
 docs/                      Content sources and migration notes
