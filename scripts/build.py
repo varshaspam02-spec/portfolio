@@ -24,6 +24,9 @@ HEAD_SCRIPT = (
 
 THEMES = [('aurora', 'Aurora'), ('ember', 'Ember'), ('acid', 'Acid')]
 
+# Repositories shown under "Selected work" on the home page, in archive order.
+FEATURED = ['linkedin-job-mcp', 'DeepseekOCR', 'Web_search_mcp']
+
 def icon(name, size=24):
     paths = {
         'arrow': '<path d="M6 18 18 6M6 6h12v12"/>',
@@ -47,6 +50,7 @@ def icon(name, size=24):
         'location': '<path d="M19 10c0 5-7 12-7 12S5 15 5 10a7 7 0 1 1 14 0Z"/><circle cx="12" cy="10" r="2"/>',
         'copy': '<rect x="8" y="8" width="13" height="13" rx="2"/><path d="M16 8V5a2 2 0 0 0-2-2H5a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h3"/>',
         'menu': '<path d="M4 8h16M4 16h16"/>',
+        'box': '<path d="M21 8 12 3 3 8v8l9 5 9-5V8Z"/><path d="m3 8 9 5 9-5M12 13v8"/>',
     }
     return f'<svg width="{size}" height="{size}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">{paths.get(name,paths["network"])}</svg>'
 
@@ -181,7 +185,7 @@ def write(path, html):
     with open(target,'w',encoding='utf-8',newline='\n') as f: f.write(html)
 
 def home():
-    selected=''.join(project_card(PROJECTS[i],i+1,True) for i in [0,1,3])
+    selected=''.join(project_card(p,i+1,True) for i,p in enumerate(PROJECTS) if p['repo'] in FEATURED)
     labcards=''.join(lab_card(LABS[i],i+1,'') for i in [0,3,6])
     stack=[]
     for p in PROJECTS:

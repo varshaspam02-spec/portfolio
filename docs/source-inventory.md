@@ -40,6 +40,11 @@ All 14 linked README files were retrieved and reviewed for descriptions, feature
 - [News Bot](https://github.com/GhoshSrinjoy/News_bot)
 - [SENSATION Voice Assistant](https://github.com/GhoshSrinjoy/SENSATION-Voice-assistant)
 
+Added after the migration, on 20 September 2026. Each entry is written from the repository's own README and metadata:
+
+- [Sat-Seg](https://github.com/GhoshSrinjoy/Sat-Seg)
+- [Dev on Demand](https://github.com/GhoshSrinjoy/Dev-on-Demand)
+
 ## Writing and external demo
 
 - [A comprehensive guide to clustering algorithms](https://medium.com/@srinjoy.ghosh/a-comprehensive-guide-to-clustering-algorithms-mathematical-foundations-and-practical-applications-f3824a4ff62f)

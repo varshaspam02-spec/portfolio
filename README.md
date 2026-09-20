@@ -5,7 +5,7 @@ A portfolio for Srinjoy Ghosh, AI/ML engineer and researcher. A living aurora ba
 ## Included
 
 - Home and engineering profile, with selected work and writing.
-- All 14 projects, with category filters, text search, technology tags, and repository links.
+- The full project archive, with category filters, text search, technology tags, and repository links.
 - Both original articles and their reading destinations.
 - Seven locally hosted interactive ML labs, plus the original external object-detection demo.
 - Contact page with email, phone, LinkedIn, and the author's GitHub profile.
