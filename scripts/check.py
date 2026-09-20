@@ -35,13 +35,13 @@ class Document(HTMLParser):
             self.scripts.append(''.join(self.content));self.inline=False
 
 def check_js(code,label):
-    result=subprocess.run(['node','--check'],input=code,text=True,capture_output=True)
+    result=subprocess.run(['node','--check'],input=code,text=True,encoding='utf-8',capture_output=True)
     if result.returncode:errors.append(label+': '+result.stderr.strip())
 
 documents={}
 for file in ROOT.rglob('*.html'):
     if '.git' in file.parts:continue
-    doc=Document();doc.feed(file.read_text());documents[file]=doc
+    doc=Document();doc.feed(file.read_text(encoding='utf-8'));documents[file]=doc
     if not doc.has_title:errors.append(str(file.relative_to(ROOT))+': missing title')
     if not doc.has_lang:errors.append(str(file.relative_to(ROOT))+': missing document language')
     duplicates={x for x in doc.ids if doc.ids.count(x)>1}
@@ -59,7 +59,7 @@ for file,doc in documents.items():
         elif parts.fragment and target in documents and parts.fragment not in documents[target].ids:
             errors.append(str(file.relative_to(ROOT))+': missing anchor '+link)
         link_count+=1
-for file in (ROOT/'assets').glob('*.js'):check_js(file.read_text(),str(file.relative_to(ROOT)))
+for file in (ROOT/'assets').glob('*.js'):check_js(file.read_text(encoding='utf-8'),str(file.relative_to(ROOT)))
 for file in (ROOT/'assets').glob('*.css'):
     for url in re.findall(r'url\([\'"]?([^\)\'\"]+)',file.read_text()):
         if not urlsplit(url).scheme and not (file.parent/url).exists():errors.append(str(file.relative_to(ROOT))+': missing CSS resource '+url)

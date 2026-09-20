@@ -11,4 +11,4 @@ These pinned files preserve the versions used by the original public playgrounds
 | `three-r128.min.js` | https://github.com/mrdoob/three.js/tree/r128 |
 | `d3-sankey-0.12.3.min.js` | https://github.com/d3/d3-sankey/tree/v0.12.3 |
 
-Space Grotesk and IBM Plex Mono are distributed under the SIL Open Font License. Their license files are in `../fonts/`.
+Geist, Geist Mono, and Instrument Serif are distributed under the SIL Open Font License. Their license files are in `../fonts/`.

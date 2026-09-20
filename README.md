@@ -1,6 +1,6 @@
 # Srinjoy Ghosh · Portfolio
 
-A cyberpunk portfolio for Srinjoy Ghosh, AI/ML engineer and researcher. Dark surfaces, mint-cyan and magenta accents, a responsive layout, and the original interactive ML playgrounds.
+A portfolio for Srinjoy Ghosh, AI/ML engineer and researcher. A living aurora backdrop, glass surfaces, large fluid typography, morphing page transitions, and the original interactive ML playgrounds.
 
 ## Included
 
@@ -10,6 +10,7 @@ A cyberpunk portfolio for Srinjoy Ghosh, AI/ML engineer and researcher. Dark sur
 - Seven locally hosted interactive ML labs, plus the original external object-detection demo.
 - Contact page with email, phone, LinkedIn, and the author's GitHub profile.
 - Keyboard navigation, visible focus styles, a mobile menu, reduced-motion support, and a motion toggle.
+- Three accent themes (Aurora, Ember, Acid), switchable from the header or footer and remembered between visits.
 - Self-hosted fonts and pinned local JavaScript dependencies. The portfolio and seven local labs do not require a CDN connection.
 
 ## Run locally
@@ -34,7 +35,15 @@ Edit `scripts/content.py`, then regenerate the pages:
 python scripts/build.py
 ```
 
-The shared visual system lives in `assets/styles.css`; navigation, search, filtering, and lab launch behavior live in `assets/main.js`.
+The shared visual system lives in `assets/styles.css`; navigation, search, filtering, pointer effects, themes, and lab launch behavior live in `assets/main.js`. The WebGL aurora backdrop and the hero's morphing point cloud live in `assets/fx.js`.
+
+### Design system
+
+- **Tokens.** Colors, radii, easing, and font stacks are CSS custom properties at the top of `assets/styles.css`. Each accent theme only overrides `--a1`, `--a2`, `--a3`, and `--warm`; the canvases read the same variables, so a new theme is one CSS rule plus an entry in `THEMES` in `scripts/build.py`. To change the default theme, edit the `:root` values.
+- **Type.** Geist (variable, 100 to 900) for interface and headlines, Instrument Serif Italic for the gradient accent words (`<em>` inside a headline), and Geist Mono for labels.
+- **Page transitions.** Navigation uses the cross-document View Transitions API: the next page opens from the click point, while the nav indicator, lab visuals, and project cards travel to their new positions through matching `view-transition-name` values. Browsers without support navigate normally.
+- **Motion.** Every animation respects the footer toggle and the operating system's reduced-motion setting. With motion off, the backdrop and point cloud hold a still frame.
+- **Progressive enhancement.** Content is fully readable without JavaScript or WebGL. A CSS gradient backdrop stands in when WebGL is unavailable.
 
 Run the static integrity checks with Python and Node.js:
 

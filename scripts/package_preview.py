@@ -10,7 +10,7 @@ ROOT=Path(__file__).resolve().parents[1]
 OUT=ROOT.parent/'deliverables'
 
 def inline_css(file):
-    css=file.read_text()
+    css=file.read_text(encoding='utf-8')
     def asset(match):
         url=match.group(1).strip('\'"')
         target=file.parent/url
@@ -20,19 +20,19 @@ def inline_css(file):
     return re.sub(r'url\(([^)]+)\)',asset,css)
 
 def inline_document(file):
-    html=file.read_text()
+    html=file.read_text(encoding='utf-8')
     deferred=[]
     def stylesheet(match):
         tag=match.group(0)
         href=re.search(r'href="([^"]+)"',tag)
         if href and 'stylesheet' in tag and not urlsplit(href[1]).scheme:
             return '<style>'+inline_css(file.parent/href[1])+'</style>'
-        return '' if 'rel="icon"' in tag else tag
+        return '' if 'rel="icon"' in tag or 'rel="preload"' in tag else tag
     html=re.sub(r'<link\b[^>]*>',stylesheet,html)
     def script(match):
         target=(file.parent/match.group(2)).resolve()
         if not target.is_file():return match.group(0)
-        code=target.read_text().replace('</script','<\\/script')
+        code=target.read_text(encoding='utf-8').replace('</script','<\\/script')
         tag='<script>'+code+'</script>'
         if 'defer' in match.group(1):
             deferred.append(tag);return ''
@@ -91,7 +91,7 @@ def build():
             html=html.replace('</body>','<script>'+bridge+'</script></body>')
         routes[path]=html
     encoded=json.dumps(routes,ensure_ascii=False).replace('<','\\u003c')
-    shell='''<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Srinjoy Ghosh · Cyberpunk portfolio preview</title><style>html,body{margin:0;height:100%;background:#080c13}iframe{display:block;width:100%;height:100dvh;border:0}</style></head><body><iframe id="preview" title="Srinjoy Ghosh portfolio preview" sandbox="allow-scripts allow-downloads allow-popups allow-popups-to-escape-sandbox"></iframe><script>
+    shell='''<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Srinjoy Ghosh · Portfolio preview</title><style>html,body{margin:0;height:100%;background:#05060b}iframe{display:block;width:100%;height:100dvh;border:0}</style></head><body><iframe id="preview" title="Srinjoy Ghosh portfolio preview" sandbox="allow-scripts allow-downloads allow-popups allow-popups-to-escape-sandbox"></iframe><script>
 const routes=__ROUTES__;
 const preview=document.getElementById('preview');
 function render(){const path=decodeURIComponent(location.hash.slice(1))||'index.html';preview.srcdoc=routes[path]||routes['404.html'];}
@@ -105,9 +105,9 @@ window.addEventListener('message',event=>{
 });
 render();
 </script></body></html>'''.replace('__ROUTES__',encoded)
-    preview_file=OUT/'srinjoy-cyberpunk-preview.html'
-    preview_file.write_text(shell)
-    archive=OUT/'srinjoy-cyberpunk-source.zip'
+    preview_file=OUT/'srinjoy-portfolio-preview.html'
+    preview_file.write_text(shell,encoding='utf-8')
+    archive=OUT/'srinjoy-portfolio-source.zip'
     with ZipFile(archive,'w',ZIP_DEFLATED,compresslevel=9) as z:
         for file in sorted(ROOT.rglob('*')):
             if not file.is_file() or any(p in ('.git','__pycache__','.cache') for p in file.parts):continue
