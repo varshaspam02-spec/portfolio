@@ -21,7 +21,8 @@
   .chart-tools{display:flex;flex-wrap:wrap;align-items:center;gap:10px 20px;padding:12px 20px 0}
   .chart-tools .field{flex:1 1 200px;grid-template-columns:auto auto minmax(0,1fr);gap:10px}
   .chart-tools .field>input{grid-column:auto}
-  .stats-5{grid-template-columns:repeat(5,minmax(0,1fr))}
+  /* Five tiles when there is room, otherwise they wrap instead of squeezing the numbers. */
+  .stats-5{grid-template-columns:repeat(auto-fit,minmax(104px,1fr))}
   .stat-value{font-size:19px;font-variant-numeric:tabular-nums}
   @media(max-width:1100px){.stage-split{grid-template-columns:1fr}}
   @media(max-width:620px){.stats-5{grid-template-columns:repeat(2,minmax(0,1fr))}}
