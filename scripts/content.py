@@ -7,7 +7,9 @@ PROFILE = {
     'github': 'https://github.com/GhoshSrinjoy',
     'linkedin': 'https://www.linkedin.com/in/srinjoy-ghosh-224852185/',
     'intro': 'Deploying intelligent agents. Optimizing AI models. Building systems that work in the real world.',
-    'bio': 'I build intelligent systems, from AI agents and retrieval pipelines to tools that make machine learning easier to understand. My work brings together over five years of engineering experience, applied research, and hands-on experimentation.',
+    'bio': 'I’m the sole AI/ML engineer at Rx Systems, owning client projects from architecture to delivery across embedded software testing for medical devices, generative AI, and industrial robotics. I also lecture on applied AI, NLP, and data management at SRH University. Behind that sits over five years of engineering and applied research.',
+    # Rendered as HTML (not escaped) so the project name can be emphasised.
+    'now': 'Day to day that means end-to-end blackbox testing frameworks for safety-critical embedded medical systems, RAG architectures and agentic workflows that write code and run test suites, MCP connectors for Claude Code, GitHub Copilot, and Azure, and predictive maintenance models for industrial cobots. I’m also the creator of <strong>RICHES</strong>, a multimodal, cross-lingual RAG system.',
 }
 
 # Content is grounded in the original portfolio and the linked project READMEs.

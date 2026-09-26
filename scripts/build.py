@@ -203,7 +203,7 @@ def home():
     <div class="marquee" aria-hidden="true" data-marquee><div class="marquee-track">{marquee}{marquee}</div></div>
     <section class="section container">{section_head('01','Selected work','Ideas, built into <em>systems.</em>', '<a class="text-link" href="projects/index.html" data-reveal>All '+str(len(PROJECTS))+' projects'+icon('arrow',18)+'</a>')}<div class="project-grid">{selected}</div></section>
     <section class="section container">{section_head('02','The engineer','Curiosity in. <em>Intelligence out.</em>')}<div class="bento">
-      <article class="bento-item bento-bio surface" data-spotlight data-reveal><p class="lead">{E(PROFILE['bio'])}</p><p>I’m currently architecting an end-to-end blackbox testing framework and software solutions. I’m also the creator of <strong>RICHES</strong>, a multimodal, cross-lingual RAG system.</p><a class="text-link" href="contact/index.html">Let’s connect{icon('arrow',18)}</a></article>
+      <article class="bento-item bento-bio surface" data-spotlight data-reveal><p class="lead">{E(PROFILE['bio'])}</p><p>{PROFILE['now']}</p><a class="text-link" href="contact/index.html">Let’s connect{icon('arrow',18)}</a></article>
       <div class="bento-item bento-stat surface" data-spotlight data-reveal><strong><span data-count="{len(PROJECTS)}">{len(PROJECTS)}</span></strong><span>Open-source projects</span></div>
       <div class="bento-item bento-stat surface" data-spotlight data-reveal><strong><span data-count="{demos}">{demos:02}</span></strong><span>Interactive demos</span></div>
       <div class="bento-item bento-stat surface" data-spotlight data-reveal><strong><span data-count="5">05</span><i>+</i></strong><span>Years of experience</span></div>
