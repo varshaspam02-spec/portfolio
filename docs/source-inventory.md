@@ -49,6 +49,7 @@ Updated on 11 October 2026, again from each repository's README and metadata:
 
 - [StructLens](https://github.com/GhoshSrinjoy/Json-Visualizer): the JSON Visualizer, rewritten and renamed in the same repository. It replaces the earlier entry and moves from Data tools to Developer tools.
 - [Chatroom](https://github.com/GhoshSrinjoy/ChatRoom): added.
+- [imgedit](https://github.com/GhoshSrinjoy/Image-Editing): added from its README, with a link to its web app at ghoshsrinjoy.github.io/Image-Editing.
 
 ## Writing and external demo
 

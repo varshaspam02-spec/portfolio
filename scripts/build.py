@@ -51,6 +51,7 @@ def icon(name, size=24):
         'copy': '<rect x="8" y="8" width="13" height="13" rx="2"/><path d="M16 8V5a2 2 0 0 0-2-2H5a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h3"/>',
         'menu': '<path d="M4 8h16M4 16h16"/>',
         'box': '<path d="M21 8 12 3 3 8v8l9 5 9-5V8Z"/><path d="m3 8 9 5 9-5M12 13v8"/>',
+        'image': '<rect x="3" y="4" width="18" height="16" rx="2"/><circle cx="9" cy="10" r="2"/><path d="m3 18 6-6 4 4 3-3 5 5"/>',
     }
     return f'<svg width="{size}" height="{size}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">{paths.get(name,paths["network"])}</svg>'
 
@@ -132,12 +133,13 @@ def project_card(p, i, compact=False):
     search=E(' '.join([p['name'],p['description'],p['category'],*p['tags']]).lower())
     details='' if compact else '<details><summary>What it does<span aria-hidden="true">+</span></summary><ul>'+features+'</ul></details>'
     repo='https://github.com/GhoshSrinjoy/'+p['repo']
+    demo=f'''<a class="card-link" href="{E(p['demo'])}" target="_blank" rel="noopener noreferrer"><span>Open the web app</span><span class="arrow-circle">{icon('arrow',17)}</span></a>''' if p.get('demo') else ''
     return f'''<article class="project-card surface" data-project data-spotlight data-tilt data-reveal data-category="{E(p['category'])}" data-search="{search}" style="view-transition-name:p-{slugify(p['repo'])}">
       <div class="card-top"><span class="project-icon">{icon(p['icon'],26)}</span><span class="card-index mono">{i:02}</span></div>
       <span class="category-label">{E(p['category'])}</span><h3>{E(p['name'])}</h3>
       <p>{E(p['description'])}</p><div class="tags">{tags}</div>
       {details}
-      <a class="card-link" href="{E(repo)}" target="_blank" rel="noopener noreferrer"><span>View repository</span><span class="arrow-circle">{icon('arrow',17)}</span></a>
+      {demo}<a class="card-link" href="{E(repo)}" target="_blank" rel="noopener noreferrer"><span>View repository</span><span class="arrow-circle">{icon('arrow',17)}</span></a>
     </article>'''
 
 def lab_card(lab, i, prefix, ext=False):

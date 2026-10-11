@@ -257,6 +257,7 @@ h1 em .w,h2 em .w{background:var(--grad);-webkit-background-clip:text;background
 .project-card details ul{margin:8px 0 0;padding-left:18px;line-height:1.75}
 .project-card details li::marker{color:var(--a3)}
 .card-link{display:flex;align-items:center;justify-content:space-between;gap:14px;margin-top:auto;padding-top:18px;border-top:1px solid var(--line);font-size:15px;font-weight:500}
+.card-link+.card-link{margin-top:14px}
 
 .lab-card{display:flex;flex-direction:column}
 .lab-visual{padding:22px 22px 34px;border-bottom:1px solid var(--line);background:radial-gradient(ellipse at 50% 35%,color-mix(in srgb,var(--a2) 17%,transparent),transparent 72%)}
