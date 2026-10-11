@@ -45,6 +45,11 @@ Added after the migration, on 20 September 2026. Each entry is written from the 
 - [Sat-Seg](https://github.com/GhoshSrinjoy/Sat-Seg)
 - [Dev on Demand](https://github.com/GhoshSrinjoy/Dev-on-Demand)
 
+Updated on 11 October 2026, again from each repository's README and metadata:
+
+- [StructLens](https://github.com/GhoshSrinjoy/Json-Visualizer): the JSON Visualizer, rewritten and renamed in the same repository. It replaces the earlier entry and moves from Data tools to Developer tools.
+- [Chatroom](https://github.com/GhoshSrinjoy/ChatRoom): added.
+
 ## Writing and external demo
 
 - [A comprehensive guide to clustering algorithms](https://medium.com/@srinjoy.ghosh/a-comprehensive-guide-to-clustering-algorithms-mathematical-foundations-and-practical-applications-f3824a4ff62f)
