@@ -51,6 +51,10 @@ Updated on 11 October 2026, again from each repository's README and metadata:
 - [Chatroom](https://github.com/GhoshSrinjoy/ChatRoom): added.
 - [imgedit](https://github.com/GhoshSrinjoy/Image-Editing): added from its README, with a link to its web app at ghoshsrinjoy.github.io/Image-Editing.
 
+Updated on 15 October 2026:
+
+- [Tadpole](https://github.com/GhoshSrinjoy/Diagram-OCR): added from its README, with a link to its model card on Hugging Face (Srinjoy99/tadpole-0.8b). Figures are the README's test-set results on 580 images.
+
 ## Writing and external demo
 
 - [A comprehensive guide to clustering algorithms](https://medium.com/@srinjoy.ghosh/a-comprehensive-guide-to-clustering-algorithms-mathematical-foundations-and-practical-applications-f3824a4ff62f)

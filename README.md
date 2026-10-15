@@ -25,7 +25,7 @@ Then open `http://localhost:8000` in your browser.
 
 ## GitHub Pages
 
-The checked-in HTML is ready to publish. In repository **Settings → Pages**, select **Deploy from a branch**, then **main** and **/ (root)**. The `.nojekyll` file enables direct static-file hosting. Links and assets use relative paths, so the site supports a GitHub Pages project subdirectory.
+The site is live at https://ghoshsrinjoy.github.io/, published from the `GhoshSrinjoy.github.io` repository. The checked-in HTML is ready to publish: in repository **Settings → Pages**, select **Deploy from a branch**, then **main** and **/ (root)**. The `.nojekyll` file enables direct static-file hosting. Links and assets use relative paths, so the pages also work from a project subdirectory. The one exception is `404.html`, which GitHub serves at any missing URL, so its `<base>` points at `SITE_URL` in `scripts/build.py`; change that if the site moves.
 
 ## Edit content
 

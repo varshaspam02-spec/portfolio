@@ -26,6 +26,8 @@ THEMES = [('aurora', 'Aurora'), ('ember', 'Ember'), ('acid', 'Acid')]
 
 # Repositories shown under "Selected work" on the home page, in archive order.
 FEATURED = ['linkedin-job-mcp', 'DeepseekOCR', 'Web_search_mcp']
+# The live address. Only the 404 page needs it: GitHub serves that page at whatever URL was missing.
+SITE_URL = 'https://ghoshsrinjoy.github.io/'
 
 def icon(name, size=24):
     paths = {
@@ -52,6 +54,7 @@ def icon(name, size=24):
         'menu': '<path d="M4 8h16M4 16h16"/>',
         'box': '<path d="M21 8 12 3 3 8v8l9 5 9-5V8Z"/><path d="m3 8 9 5 9-5M12 13v8"/>',
         'image': '<rect x="3" y="4" width="18" height="16" rx="2"/><circle cx="9" cy="10" r="2"/><path d="m3 18 6-6 4 4 3-3 5 5"/>',
+        'diagram': '<rect x="3" y="3" width="8" height="6" rx="1"/><rect x="13" y="15" width="8" height="6" rx="1"/><path d="M7 9v4h10v2m-2-2 2 2 2-2"/>',
     }
     return f'<svg width="{size}" height="{size}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">{paths.get(name,paths["network"])}</svg>'
 
@@ -133,7 +136,7 @@ def project_card(p, i, compact=False):
     search=E(' '.join([p['name'],p['description'],p['category'],*p['tags']]).lower())
     details='' if compact else '<details><summary>What it does<span aria-hidden="true">+</span></summary><ul>'+features+'</ul></details>'
     repo='https://github.com/GhoshSrinjoy/'+p['repo']
-    demo=f'''<a class="card-link" href="{E(p['demo'])}" target="_blank" rel="noopener noreferrer"><span>Open the web app</span><span class="arrow-circle">{icon('arrow',17)}</span></a>''' if p.get('demo') else ''
+    demo=f'''<a class="card-link" href="{E(p['demo'])}" target="_blank" rel="noopener noreferrer"><span>{E(p.get('demo_label','Open the web app'))}</span><span class="arrow-circle">{icon('arrow',17)}</span></a>''' if p.get('demo') else ''
     return f'''<article class="project-card surface" data-project data-spotlight data-tilt data-reveal data-category="{E(p['category'])}" data-search="{search}" style="view-transition-name:p-{slugify(p['repo'])}">
       <div class="card-top"><span class="project-icon">{icon(p['icon'],26)}</span><span class="card-index mono">{i:02}</span></div>
       <span class="category-label">{E(p['category'])}</span><h3>{E(p['name'])}</h3>
@@ -259,7 +262,7 @@ def build():
     lost=page_intro('404','Signal lost','Page not <em>found.</em>','This page has moved or doesn’t exist.')
     lost=lost.replace('</section>',button('Back to home','index.html','primary','arrow-right')+'</section>')
     missing=page('Page not found','',lost)
-    write(Path('404.html'),missing.replace('<head>', '<head><base href="/portfolio/">', 1))
+    write(Path('404.html'),missing.replace('<head>', f'<head><base href="{SITE_URL}">', 1))
     (ROOT/'.nojekyll').touch()
     print('Generated 12 portfolio pages and the 404 page.')
 
